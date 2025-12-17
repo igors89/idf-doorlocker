@@ -100,8 +100,7 @@ namespace DeviceManager{
     static void touch_task(void*){
         uint8_t dev;
         for(;;){if(xQueueReceive(touch_queue,&dev,portMAX_DELAY)){
-            if(dev == 0){buzzer_beep_nonblocking(BUZZER_MS);}
-            else{buzzer_beep_nonblocking(BUZZER_MS);handlerDev(dev);}}
+            buzzer_beep_nonblocking(BUZZER_MS);ESP_LOGI(TAG, "Botão Touch pressionado: %d", dev + 1);}
         }
     }
     static void timer_callback(void* arg){
