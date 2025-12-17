@@ -1,0 +1,17 @@
+{
+  "1": {
+    "type": "On/off light",
+    "name": "$DEVICE1$",
+    "uniqueid": "00:$MAC$:01:00"
+  },
+  "2": {
+    "type": "On/off light",
+    "name": "$DEVICE2$",
+    "uniqueid": "00:$MAC$:02:00"
+  },
+  "3": {
+    "type": "On/off light",
+    "name": "$DEVICE3$",
+    "uniqueid": "00:$MAC$:03:00"
+  }
+}

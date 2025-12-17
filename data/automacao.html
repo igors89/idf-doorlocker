@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IA Solucoes</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/igra.css">
+  </head>
+  <body>
+    <script src="/js/icons.js"></script>
+    <script src="/js/messages.js"></script>
+    <script>
+      window.onload=function(){
+        // permissão de acesso
+        if(sessionStorage.getItem("autenticado")!=="sim"){window.location.href="index.html";return;}
+        // variáveis
+        const socket=new WebSocket(`ws://${location.host}/ws`);
+        const index=document.getElementById("divIndex");
+        const painel=document.getElementById("divPainel");
+        let atuadores={};
+        // comportamentos
+        document.getElementById('btnCancelar').addEventListener("click",getCancel);
+        document.getElementById('btnSalvar').addEventListener('click', sendAuto);
+        socket.addEventListener('open',function(event){socket.send("LDM");});
+        // funções
+        function getCancel(){
+          event.preventDefault();
+          window.location.href=`index.html`;
+        }
+        function sendAuto(){
+          const progItems=document.querySelectorAll('#divPainel .prog-item');
+          const agendaData={};
+          progItems.forEach(item=>{
+            const sensorId=item.dataset.id;
+            const sensorName=item.dataset.nameSense;
+            const sensorType=item.dataset.typeSense;
+            const actSense=[];
+            const atuadores=item.querySelectorAll('.prog-auto');
+            atuadores.forEach(atuador=>{
+              const checkbox=atuador.querySelector('input[type="checkbox"]');
+              const btn=atuador.querySelector('.auto-dow-btn');
+              const spanAtuador=atuador.querySelector('span.auto-class');
+              if(checkbox.checked){
+                actSense.push({
+                  idAct:checkbox.id,
+                  nameAct:spanAtuador.textContent,
+                  statAct:btn.classList.contains('active')?1:0
+                });
+              }
+            });
+            agendaData[sensorId]={
+              nameSense:sensorName,
+              typeSense:sensorType,
+              actSense:actSense
+            };
+          });
+          const jsonData=JSON.stringify(agendaData);
+          if(socket.readyState===WebSocket.OPEN){
+            socket.send("SVM"+jsonData);
+          }
+          event.preventDefault();
+          window.location.href=`index.html`;
+        }
+        function genAutoma(id,sensor){
+          const box=document.createElement('div');
+          box.className='prog-item';
+          box.id=id;
+          box.dataset.id=String(id);
+          box.dataset.nameSense=String(sensor.nameSense);
+          box.dataset.typeSense=String(sensor.typeSense);
+          const title=document.createElement('div');
+          title.className='prog-title';
+          title.textContent=sensor.nameSense.slice(0,18);
+          box.append(title);
+          for(const actDisp of sensor.actSense){
+            const prog=document.createElement('div');
+            prog.className='prog-auto';
+            const label=document.createElement('label');
+            label.className='custom-checkbox';
+            const input=document.createElement('input');
+            input.type='checkbox';
+            input.id=actDisp.idAct;
+            input.checked=actDisp.usedAct===1;
+            const spanL=document.createElement('span');
+            spanL.className='checkmark';
+            label.appendChild(input);
+            label.appendChild(spanL);
+            prog.appendChild(label);
+            const span=document.createElement('span');
+            span.textContent=actDisp.nameAct.slice(0,18);
+            span.className='auto-class';
+            prog.appendChild(span);
+            const btn=document.createElement('button');
+            btn.className='auto-dow-btn';
+            if(actDisp.statAct===1){btn.classList.add('active');}else{btn.classList.remove('active');}
+            btn.addEventListener('click',function(){this.classList.toggle('active');});
+            prog.appendChild(btn);
+            box.append(prog);
+          }
+          painel.appendChild(box);
+        }
+        socket.onmessage=function(event){
+          try{
+            if(event.data.startsWith("keep")){
+              socket.send("alive");
+            }
+            if(event.data.startsWith("sendAutoma")){
+              const automa=JSON.parse(event.data.substring(10));
+              for(const sensorId in automa){
+                const actSense=automa[sensorId].actSense;
+                for(const idAtuador in atuadores){
+                  const existe=actSense.some(acao=>acao.idAct===idAtuador);
+                  if(existe){actSense.find(acao=>acao.idAct===idAtuador).usedAct=1;}
+                  else{actSense.push({idAct:idAtuador,nameAct:atuadores[idAtuador],statAct:0,usedAct:0});}
+                }
+              }
+              painel.innerHTML='';
+              for (const sensorId in automa){genAutoma(sensorId,automa[sensorId]);}
+            }
+            if(event.data.startsWith("sendDisp")){
+              const obj=JSON.parse(event.data.substring(8));
+              atuadores={};
+              for(let i=1;i<obj.length;i++){
+                atuadores[obj[i][0]]=obj[i][1];
+              }
+            }
+          }catch(e){console.error("Erro ao processar mensagem WS:",e);}
+        };
+        // inicialização
+        index.style.display="flex";
+        document.getElementById("iconSave").innerHTML=icons["save"];
+        document.getElementById("iconCancelar").innerHTML=icons["exit"];
+      };
+    </script>
+    <div id="divTopo" class="topo"><h2>Sistema de Automação</h2></div>
+    <div id="divIndex" class="util">
+      <div id="divPainel" class="in_util"></div>
+      <div class="form-group">    
+        <button type="button" id="btnSalvar" class="btn-custom"><span id="iconSave"></span>Salvar</button>
+      </div>
+      <div class="form-group">
+        <button type="button" id="btnCancelar" class="btn-custom"><span id="iconCancelar"></span>Cancelar</button>
+      </div>
+    </div>
+    <div class="rodape" id="divRodape"><img src="/img/logomarca" width="40px" height="40px"></div>
+  </body>
+</html>

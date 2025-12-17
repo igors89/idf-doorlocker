@@ -1,0 +1,21 @@
+{
+  "type": "On/off light",
+  "name": "$DEVICENAME$",
+  "uniqueid": "00:$MAC$:0$DEVICE$:00",
+  "modelid": "HASS321",
+  "manufacturer": "IA Solucoes",
+  "productname": "E4",
+  "state": {
+    "on": $STATUS$,
+    "mode": "homeautomation",
+    "reachable": true
+  },
+  "capabilities": {
+    "certified": false,
+    "streaming": {
+      "renderer": true,
+      "proxy": false
+    }
+  },
+  "swversion": "5.105.0.21169"
+}

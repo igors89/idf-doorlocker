@@ -1,0 +1,11 @@
+# Name,type,subtype,offset,size
+nvs,data,nvs,0x00009000,0x00004000
+phy_init,data,phy,0x0000D000,0x00001000
+otadata,data,ota,0x0000E000,0x00002000
+app0,app,ota_0,0x00010000,0x00400000
+app1,app,ota_1,0x00410000,0x00400000
+littlefs,data,littlefs,0x00810000,0x00300000
+coredump,data,coredump,0x00B10000,0x00020000
+factory,app,factory,0x00B30000,0x00400000
+certs,data,fat,0x00F30000,0x00040000
+logs,data,fat,0x00F70000,0x00080000

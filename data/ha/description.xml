@@ -1,0 +1,18 @@
+<?xml version=\"1.0\" ?>
+  <root xmlns=\"urn:schemas-upnp-org:device-1-0\">
+    <specVersion><major>1</major><minor>0</minor></specVersion>
+    <URLBase>http://$IP$/</URLBase>
+    <device>
+      <deviceType>urn:schemas-upnp-org:device:basic:1</deviceType>
+      <friendlyName>IA hue</friendlyName>
+      <manufacturer>IA Solutions Electronics</manufacturer>
+      <manufacturerURL>http://ia.srv.com.br</manufacturerURL>
+      <modelDescription>IA hue Personal Wireless Lighting</modelDescription>
+      <modelName>IA hue bridge 2025</modelName>
+      <modelNumber>929000226503</modelNumber>
+      <modelURL>http://www.meethue.com</modelURL>
+      <serialNumber>$ID$</serialNumber>
+      <UDN>uuid:$ID$</UDN>
+      <presentationURL>index.html</presentationURL>
+    </device>
+  </root>

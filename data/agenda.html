@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IA Solucoes</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/igra.css">
+  </head>
+  <body>
+    <script src="/js/icons.js"></script>
+    <script src="/js/messages.js"></script>
+    <script>
+      window.onload=function(){
+        // permissão de acesso
+        if(sessionStorage.getItem("autenticado")!=="sim"){window.location.href="index.html";return;}
+        // variáveis
+        const socket=new WebSocket(`ws://${location.host}/ws`);
+        const index=document.getElementById("divIndex");
+        const painel=document.getElementById("divPainel");
+        const DOW=['D','S','T','Q','Q','S','S'];
+        // comportamentos
+        document.getElementById('btnCancelar').addEventListener("click",getCancel);
+        document.getElementById('btnSalvar').addEventListener('click', sendSchd);
+        socket.addEventListener('open',function(event){socket.send("LDA");});
+        document.getElementById('btnAdd').addEventListener("click",addPnl);
+        // funções
+        function getCancel(){
+          event.preventDefault();
+          window.location.href=`index.html`;
+        }
+        function initTime(){
+          const now=new Date();
+          const hours=String(now.getHours()).padStart(2,'0');
+          const minutes=String(now.getMinutes()).padStart(2,'0');
+          document.getElementById('newMOD').value=`${hours}:${minutes}`;
+        }
+        function avalNewPnl(){
+          let newMaskDow=0;
+          const dowButtons=document.querySelectorAll('#divDOW .agd-dow-btn.active');
+          dowButtons.forEach(button=>{newMaskDow|=parseInt(button.dataset.bit);});
+          const dispSelect=document.getElementById('newDisp');
+          const newDispID=dispSelect.value;
+          const btnAdd=document.getElementById('btnAdd');
+          btnAdd.disabled=!(newMaskDow>0&&newDispID);
+        }
+        function addPnl(){
+          let newMaskDow=0;
+          const dowButtons=document.querySelectorAll('#divDOW .agd-dow-btn.active');
+          dowButtons.forEach(button=>{newMaskDow|=parseInt(button.dataset.bit);});
+          const timeInput=document.getElementById('newMOD');
+          const [hours,minutes]=timeInput.value.split(':').map(Number);
+          const timeMOD=(hours*60)+minutes;
+          const dispSelect=document.getElementById('newDisp');
+          const newDispID=dispSelect.value;
+          const newDispName=dispSelect.options[dispSelect.selectedIndex].text;
+          const newStatus=document.getElementById('newAcao').value;
+          const newDiv=genProg({agenda:0,dow:newMaskDow,mod:timeMOD,id:newDispID,status:newStatus,name:newDispName});
+          const painel=document.getElementById("divPainel");
+          painel.appendChild(newDiv);
+          if(dispSelect.options.length>0){dispSelect.selectedIndex=0;}
+          newStatus.value="1";
+          initTime();
+          document.querySelectorAll('#divDOW .agd-dow-btn').forEach(btn=>btn.classList.remove('active'));
+        }
+        function sendSchd(){
+          const progItems=document.querySelectorAll('#divPainel .prog-item');
+          const agendaData=[];
+          progItems.forEach(item=>{
+            agendaData.push([
+              item.dataset.dow,
+              item.dataset.mod,
+              item.dataset.id,
+              item.dataset.status,
+              item.dataset.name
+            ]);
+          });
+          const jsonData=JSON.stringify([agendaData]);
+          if(socket.readyState===WebSocket.OPEN){socket.send("SVA"+jsonData);}
+          event.preventDefault();
+          window.location.href=`index.html`;
+        }
+        function createDOW(){
+          const dowDiv=document.getElementById("divDOW");
+          DOW.forEach((d,index)=>{
+            const b=document.createElement('button');
+            b.className='agd-dow-btn';
+            b.textContent=d;
+            b.dataset.bit=String(1<<index);
+            b.addEventListener('click',()=>{b.classList.toggle('active');avalNewPnl();});
+            dowDiv.appendChild(b);
+          });
+          avalNewPnl();
+        }
+        function genProg(prog){
+          const {agenda=0,dow=0,mod=0,id='',status=0,name=''}=prog;
+          const box=document.createElement('div');
+          box.className='prog-item';
+          box.dataset.agenda=String(agenda);
+          box.dataset.dow=String(dow);
+          box.dataset.mod=String(mod);
+          box.dataset.id=id;
+          box.dataset.status=String(status);
+          box.dataset.name=name;
+          const title=document.createElement('div');
+          title.className='prog-title';
+          title.textContent=name||'—';
+          const dowEl=document.createElement('div');
+          dowEl.className='prog-dow';
+          for(let bit=0;bit<7;bit++){
+            const sp=document.createElement('span');
+            sp.textContent=DOW[bit];
+            sp.className=(dow&(1<<bit))?'on':'off';
+            dowEl.appendChild(sp);
+          }
+          const meta=document.createElement('div');
+          meta.className='prog-meta';
+          const act=document.createElement('span');
+          act.className='prog-action';
+          act.textContent=(Number(status)===1)?'Ligar':'Desligar';
+          const time=document.createElement('span');
+          time.className='prog-time';
+          {
+            const total=((Number(mod)%1440)+1440)%1440;
+            const h=Math.floor(total/60),m=total%60;
+            time.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+          }
+          const del=document.createElement('button');
+          del.type='button';
+          del.className='prog-del-btn';
+          del.innerHTML=`${icons.trash_2}`;
+          del.addEventListener('click',(e)=>{e.preventDefault();box.remove();});
+          meta.append(act,time,del);
+          box.append(title,dowEl,meta);
+          return box;
+        }
+        socket.onmessage=function(event){
+          try{
+            const obj=JSON.parse(event.data);
+            const tipoMsg=obj[0][0];
+            if(event.data.startsWith("keep")){
+              socket.send("alive");
+            }
+            if(tipoMsg==="list"){
+              painel.innerHTML="";
+              for(let i=1;i<obj.length;i++){
+                const disp=obj[i];
+                const newDiv=genProg({agenda:disp[0],dow:disp[1],mod:disp[2],id:disp[3],status:disp[4],name:disp[5]});
+                painel.appendChild(newDiv);
+              }
+            }
+            if(tipoMsg==="disp"){
+              const select=document.getElementById('newDisp');
+              select.innerHTML='';
+              for(let i=1;i<obj.length;i++){
+                const disp=obj[i];
+                const option=document.createElement('option');
+                option.value=disp[0];
+                option.textContent=disp[1];
+                select.appendChild(option);
+              }
+              if(select.options.length>0){select.selectedIndex=0;}
+              avalNewPnl();
+            }
+          }catch(e){console.error("Erro ao processar mensagem WS:",e);}
+        };
+        // inicialização
+        index.style.display="flex";
+        document.getElementById("iconSave").innerHTML=icons["save"];
+        document.getElementById("iconCancelar").innerHTML=icons["exit"];
+        document.getElementById("iconAdd").innerHTML=icons["add"];
+        initTime();
+        createDOW();
+      };
+    </script>
+    <div id="divTopo" class="topo"><h2>Sistema de Automação</h2></div>
+    <div id="divIndex" class="util">
+      <div class="prog-item" id="newSchedule">
+        <div class="form-group disp-container">
+          <select name="newDisp" id="newDisp"></select>
+          <button type="button" id="btnAdd" class="prog-del-btn"><span id="iconAdd"></span></button>
+        </div>
+        <div class="form-group">
+          <label>Dias da Semana</label>
+          <div class="agd-dow" id="divDOW"></div>
+        </div>
+        <div class="form-group acao-container">
+          <select name="newAcao" id="newAcao">
+            <option value="0">Desligar</option>
+            <option value="1" selected>Ligar</option>
+          </select>
+          <input type="time" id="newMOD" name="newMOD">
+        </div>
+      </div>
+      <div id="divPainel" class="in_util"></div>
+      <div class="form-group">    
+        <button type="button" id="btnSalvar" class="btn-custom"><span id="iconSave"></span>Salvar</button>
+      </div>
+      <div class="form-group">
+        <button type="button" id="btnCancelar" class="btn-custom"><span id="iconCancelar"></span>Cancelar</button>
+      </div>
+    </div>
+    <div class="rodape" id="divRodape"><img src="/img/logomarca" width="40px" height="40px"></div>
+  </body>
+</html>

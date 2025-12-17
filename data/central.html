@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IA Solucoes</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/igra.css">
+  </head>
+  <body>
+    <script src="/js/icons.js"></script>
+    <script src="/js/messages.js"></script>
+    <script>
+      window.onload=function(){
+        // permissão de acesso
+        if(sessionStorage.getItem("autenticado")!=="sim"){window.location.href="index.html";return;}
+        // variáveis
+        const socket=new WebSocket(`ws://${location.host}/ws`);
+        const painel=document.getElementById("divIndex");
+        // comportamentos
+        socket.addEventListener('open',function(event){socket.send("LDD");});
+        // funções
+        function updateDimmerUI(btn){
+          const slider=btn.querySelector(`.dimmer-range`);
+          const pctEl=btn.querySelector(`.tempo`);
+          const v=Math.max(0,Math.min(100,parseInt(slider.value,10)||0));
+          slider.style.setProperty('--dimmer-pct',v+'%');
+          if(pctEl)pctEl.textContent=v+'%';
+        }
+        function genDisp(dispositivo){
+          const{id,nome,tipo,status,tempo}=dispositivo;
+          const botao=document.createElement('button');
+          botao.id=id;
+          botao.className=(tipo===4)?'btn-painel dimmer':'btn-painel';
+          botao.dataset.id=String(id);
+          botao.dataset.tipo=String(tipo);
+          botao.dataset.status=String(status);
+          let icone="";
+          switch(tipo){
+            case 1: icone=icons.power.replace('stroke="currentColor"',status=='1'?'stroke="limegreen"':'stroke="Crimson"');break;
+            case 2: icone=icons.pulse.replace('stroke="currentColor"','stroke="goldenrod"');break;
+            case 3: icone=icons.watch.replace('stroke="currentColor"','stroke="goldenrod"');break;
+            case 4: icone=icons.sun.replace('stroke="currentColor"',status=='1'?'stroke="limegreen"':'stroke="Crimson"');break;
+          }
+          if(tipo===4){
+            botao.innerHTML=`
+              <div class="dimmer-body">
+                <div class="area-esquerda"><span class="icone">${icone}</span><span class="tempo" id="pct-${id}">${Number(tempo)||0}%</span></div>
+                <div class="area-direita">
+                  <div class="area-nome">${nome}</div>
+                  <div class="slider-row"><input type="range" class="dimmer-range" id="range-${id}" min="0" max="100" step="1" value="${Number(tempo)||0}"></div>
+                </div>
+              </div>`;
+            const slider=botao.querySelector('.dimmer-range');
+            slider.addEventListener('input',()=>updateDimmerUI(botao));
+            slider.addEventListener('change',()=>btnDimm(botao));
+            const btn=botao.querySelector('.area-esquerda');
+            btn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();btnAct(botao);});
+            updateDimmerUI(botao);
+          }else{
+            botao.innerHTML=`
+              <div class="area-esquerda"><span class="icone">${icone}</span>${tipo===3?`<span class="tempo">${tempo}s</span>`:""}</div>
+              <div class="area-nome">${nome}</div>`;
+            botao.addEventListener('click',()=>btnAct(botao));
+          }
+          return botao;
+        }
+        function btnAct(btn){
+          const id=btn.dataset.id;
+          const status=btn.dataset.status;
+          const tipo=btn.dataset.tipo;
+          const msg=`${(id=='1'||id=='2'||id=='3')?'INT':'CMD'}:${id}:${status}:${tipo}`;
+          socket.send(msg);
+          const ic=btn.querySelector('.icone');
+          ic.innerHTML=icons.refresh_cw;
+          ic.classList.add('is-sending');
+        }
+        function btnDimm(btn){
+          const id=btn.dataset.id;
+          const tipo=btn.dataset.tipo;
+          const slider=btn.querySelector('.dimmer-range');
+          const tempo=Math.max(0,Math.min(100,parseInt(slider.value,10)||0));
+          socket.send(`BRG:${id}:${tempo}:${tipo}`);
+          const ic=btn.querySelector('.icone');
+          ic.innerHTML=icons.refresh_cw;
+          ic.classList.add('is-sending');
+        }
+        socket.onmessage=function(event){
+          try{
+            const obj=JSON.parse(event.data);
+            const tipoMsg=obj[0][0];
+            if(tipoMsg==="new"){
+              painel.innerHTML="";
+              for(let i=1;i<obj.length;i++){
+                const disp=obj[i];
+                const botao=genDisp({id:disp[0],nome:disp[1],tipo:disp[2],status:disp[3],tempo:disp[4]||0});
+                painel.appendChild(botao);
+              }
+              const btnSair=document.createElement("button");
+              btnSair.id="botaoSair";
+              btnSair.className="btn-painel";
+              btnSair.innerHTML=`<div class="area-esquerda"><span class="icone">${icons["exit"]}</span></div><div class="area-nome">Sair</div>`;
+              btnSair.onclick=()=>window.location.href="/";
+              painel.appendChild(btnSair);
+            }
+            if(tipoMsg==="update"){
+              const [id,nome,tipo,status,tempo]=obj[1];
+              const existBtn=document.getElementById(id);
+              const newBtn=genDisp({id,nome,tipo,status,tempo});
+              if(existBtn){painel.replaceChild(newBtn,existBtn);}else{painel.appendChild(newBtn);}
+            }
+            if(event.data.startsWith("keep")){
+              socket.send("alive");
+            }
+          }catch(e){console.error("Erro ao processar mensagem WS:",e);}
+        };
+        // inicialização
+        painel.style.display="flex";
+      };
+    </script>
+    <div id="divTopo" class="topo"><h2>Sistema de Automação</h2></div>
+    <div id="divIndex" class="util"></div>
+    <div class="rodape" id="divRodape"><img src="/img/logomarca" width="40px" height="40px"></div>
+  </body>
+</html>

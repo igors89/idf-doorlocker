@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IA Solucoes</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/igra.css">
+  </head>
+  <body>
+    <script src="/js/icons.js"></script>
+    <script src="/js/messages.js"></script>
+    <script>
+      window.onload=function(){
+        // variáveis
+        let rede_conectada;
+        let senha_anterior;
+        let senhaVisivel=true;
+        let tkVisivel=true;
+        let tentativas=0;
+        let timeoutId;
+        let fileDescriptor;
+        const socket=new WebSocket(`ws://${location.host}/ws`);
+        const labelwifi=document.getElementById('labelNomewifi');
+        const host="HOST:"+window.location.hostname;
+        // comportamentos
+        document.getElementById('imgLogin').addEventListener('click',showPass);
+        document.getElementById('imgSenha').addEventListener('click',showPass);
+        document.getElementById('imgPassTk').addEventListener('click',showPassTk);
+        document.getElementById("btnDispositivo").addEventListener("click",()=>handleLoginAndRedirect(null));
+        document.getElementById("btnCentral").addEventListener("click",()=>handleLoginAndRedirect('central.html'));
+        document.getElementById("btnAgenda").addEventListener("click",()=>handleLoginAndRedirect('agenda.html'));
+        document.getElementById("btnAutomacao").addEventListener("click",()=>handleLoginAndRedirect('automacao.html'));
+        document.getElementById("btnAtualizar").addEventListener("click",()=>handleLoginAndRedirect('atualizar.html'));
+        document.getElementById('btnSair').addEventListener("click",exit);
+        document.getElementById('btnCancelar').addEventListener("click",getCancel);
+        document.getElementById('formWIFI').addEventListener('submit',netTest);
+        document.getElementById('dTipo1').addEventListener("change",showTime1);
+        document.getElementById('dTipo2').addEventListener("change",showTime2);
+        document.getElementById('dTipo3').addEventListener("change",showTime3);
+        document.getElementById('authInterno').addEventListener('change',updateAuthMode);
+        document.getElementById('authCustom').addEventListener('change',updateAuthMode);
+        // window.addEventListener("unload",getExit);
+        // document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){getExit();}});
+        socket.addEventListener('open',function(event){socket.send(host);socket.send("NET");timeoutId=setTimeout(()=>{showMessage('erroCom');},20000);});
+        // funções
+        function updateAuthMode(){
+          const interno=document.getElementById('authInterno').checked;
+          document.getElementById('userChoice').value=interno?'0':'1';
+          document.getElementById('boxTokenInterno').style.display=interno?'':'none';
+          document.getElementById('boxCredenciais').style.display=interno?'none':'';
+          const pass=document.getElementById('inpPassTk');
+          const mail=document.getElementById('userTk');
+          if(pass)pass.required=!interno;
+          if(mail)mail.required=!interno;
+        }
+        function exit(){
+          // getExit();
+          showDiv('divAguarde');
+          window.close(); 
+        }
+        // function getExit(){
+        //   navigator.sendBeacon("/encerrar/"+fileDescriptor);
+        // }
+        function getCancel(){
+          event.preventDefault();
+          window.location.href=`index.html`;
+        }
+        function showDiv(id){
+          document.querySelectorAll('.util').forEach(div=>{div.style.display=(div.id===id)?'flex':'none';});
+        }
+        function showMessage(message){
+          document.getElementById('divResultado').innerHTML=messages[message];
+          showDiv('divAviso');
+        }
+        function showPass(){
+          senhaVisivel=!senhaVisivel;
+          document.getElementById('inpLogin').type=document.getElementById('inpSenha').type=senhaVisivel?"text":"password";
+          document.getElementById('imgLogin').innerHTML=document.getElementById('imgSenha').innerHTML=senhaVisivel?icons["eye"]:icons["eye_off"];
+        }
+        function showPassTk(){
+          tkVisivel=!tkVisivel;
+          document.getElementById('inpPassTk').type=tkVisivel?"text":"password";
+          document.getElementById('imgPassTk').innerHTML=tkVisivel?icons["eye"]:icons["eye_off"];
+        }
+        function handleLoginAndRedirect(targetPage){
+          senha_anterior=document.getElementById('inpSenha').value=document.getElementById('inpLogin').value;
+          fetch("/GET/login",{method:"POST",headers:{'Content-Type':'text/plain'},body:senha_anterior})
+          .then(res => res.text())
+          .then(data => {
+            if(data.startsWith("sucesso:")){
+              if(targetPage){
+                sessionStorage.setItem("autenticado", "sim");
+                const token=data.split(":")[1];
+                window.location.href=`${targetPage}?token=${token}`;
+              }else{
+                labelwifi.style.color = "green";
+                showDiv('divIndex');
+              }
+            }else{alert("ERRO! Senha incorreta!");}
+          })
+          .catch(err=>{showMessage('erroCom');});
+        }
+        function showTime1(){
+          if (document.getElementById('divTempo1')){divTempo1.style.display=(document.getElementById('dTipo1').value==='3') ? 'flex':'none';}
+        }
+        function showTime2(){
+          if (document.getElementById('divTempo2')){divTempo2.style.display=(document.getElementById('dTipo2').value==='3') ? 'flex':'none';}
+        }
+        function showTime3(){
+          if (document.getElementById('divTempo3')){divTempo3.style.display=(document.getElementById('dTipo3').value==='3') ? 'flex':'none';}
+        }
+        function netTest(event){
+          showDiv('divAguarde');
+          event.preventDefault();
+          const formWIFI=document.getElementById('formWIFI');
+          const formData=new FormData(formWIFI);
+          const dataToSend={};
+          for(const pair of formData.entries()){dataToSend[pair[0]]=pair[1];}
+          const message="CONFIG"+JSON.stringify(dataToSend);
+          socket.send(message);
+          timeoutId=setTimeout(()=>{showMessage('erroCom');timeoutId=null;},20000);
+        }
+        socket.onmessage=function(event){
+          try{
+            if(event.data.startsWith("listNet")){
+              clearTimeout(timeoutId);
+              const msg=event.data.substring(7);
+              if(msg.trim().startsWith('<option')){
+                document.getElementById('nomewifi').innerHTML='<option value="" disabled selected>Selecione uma rede</option>'+msg;
+                socket.send("INFO");
+              }
+            }
+            if(event.data.startsWith("configOk")){
+              clearTimeout(timeoutId);
+              const currentSelectedWifi=document.getElementById('nomewifi').value;
+              const currentSelectedPass=document.getElementById('inpSenha').value;
+              const wifiChanged=((currentSelectedWifi!==rede_conectada)||(currentSelectedPass!==senha_anterior));
+              if(wifiChanged){
+                const dataToSend={};
+                dataToSend['nomewifi']=document.getElementById('nomewifi').value;
+                dataToSend['inpSenha']=document.getElementById('inpSenha').value;
+                const message="CREDENTIAL"+JSON.stringify(dataToSend);
+                socket.send(message);
+                timeoutId=setTimeout(()=>{showMessage('erroSid');timeoutId=null;},60000);
+              }else{
+                showMessage('sucesso');
+              }
+            }
+            if(event.data.startsWith("credentialOk")){
+              clearTimeout(timeoutId);
+              showMessage('sucesso');
+            }
+            if(event.data.startsWith("fd")){
+              const msg=event.data.substring(2);
+              fileDescriptor=msg;
+            }
+            if(event.data.startsWith("keep")){
+              socket.send("alive");
+            }
+            if(event.data.startsWith("navegAP")){
+              const btCentral=document.getElementById("btnCentral");
+              btCentral.disabled=true;
+              btCentral.classList.add('btn-custom-disabled');
+              btCentral.classList.remove('btn-custom');
+              btCentral.setAttribute('tabindex','-1');
+             document.getElementById("iconCentral").innerHTML=icons["grid2"];
+            }
+            if(event.data.startsWith("listInfo")){
+              clearTimeout(timeoutId);
+              const msg=event.data.substring(8);
+              if(msg.startsWith('error')){showMessage('erroDat');}
+              else{
+                data=JSON.parse(msg);
+                document.getElementById('cNome').value=data.cNome;
+                document.getElementById('dNome1').value=data.dNome1;
+                document.getElementById('dTipo1').value=data.dTipo1;
+                document.getElementById('dTempo1').value=data.dTempo1;
+                document.getElementById('dNome2').value=data.dNome2;
+                document.getElementById('dTipo2').value=data.dTipo2;
+                document.getElementById('dTempo2').value=data.dTempo2;
+                document.getElementById('dNome3').value=data.dNome3;
+                document.getElementById('dTipo3').value=data.dTipo3;
+                document.getElementById('dTempo3').value=data.dTempo3;
+                document.getElementById('inpPassTk').value=data.passToken;
+                document.getElementById('userTk').value=data.userToken;
+                document.getElementById('tokenFixo').value=data.token;
+                rede_conectada=data.ssid;
+                senha_anterior=data.pass;
+                if(rede_conectada.length>0){labelwifi.style.color="red";}
+                else{labelwifi.style.color="white";}
+                if(data.useUserToken==="1"){document.getElementById('authCustom').checked=true;}
+                else{document.getElementById('authInterno').checked=true;}
+                updateAuthMode();
+                if(data.conexao==="con"){showDiv('divLogin');}else{showDiv('divIndex');}
+                showTime1();
+                showTime2();
+                showTime3();
+              }
+            }
+            if(event.data.startsWith("errorRevert")){
+              clearTimeout(timeoutId);
+              {showMessage('erroRev');};
+            }
+            if(event.data.startsWith("errorTry")){
+              clearTimeout(timeoutId);
+              {showMessage('erroSid');}
+            }
+          }catch(e){console.error("Erro ao processar mensagem WS:",e);}
+        };
+        // inicialização
+        showDiv('divAguarde');
+        document.getElementById("iconDispositivo").innerHTML=icons["settings"];
+        document.getElementById("iconSave").innerHTML=icons["save"];
+        document.getElementById("iconeAguarde").innerHTML=icons["refresh_cw"];
+        document.getElementById("iconCentral").innerHTML=icons["grid"];
+        document.getElementById("iconAgenda").innerHTML=icons["sched"];
+        document.getElementById("iconAutoma").innerHTML=icons["automa"];
+        document.getElementById("iconAtualiza").innerHTML=icons["zap"];
+        document.getElementById("iconSair").innerHTML=icons["exit"];
+        document.getElementById("iconCancelar").innerHTML=icons["exit"];
+        showPass();
+        showPassTk();
+        updateAuthMode();
+      };
+    </script>
+    <div id="divTopo" class="topo"><h2>Sistema de Automação</h2></div>
+    <div id="divLogin" class="util">
+      <form id="formLogin" action="login">
+        <div class="form-group">
+          <label for="inpLogin" id="labelLogin">Senha do WiFi conectado:</label>
+          <div class="input-with-image">
+            <input type="password" name="inpLogin" id="inpLogin" maxlength="50">
+            <div id="imgLogin" class="img-over-input"></div>
+          </div>
+        </div><br>
+        <div class="form-group">
+          <button type="button" id="btnCentral" class="btn-custom"><span id="iconCentral"></span>Painel Controle</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnDispositivo" class="btn-custom"><span id="iconDispositivo"></span>Configuração</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnAgenda" class="btn-custom"><span id="iconAgenda"></span>Agendamento</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnAutomacao" class="btn-custom"><span id="iconAutoma"></span>Automação</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnAtualizar" class="btn-custom"><span id="iconAtualiza"></span>Atualizar Central</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnSair" class="btn-custom"><span id="iconSair"></span>Sair</button>
+        </div>
+      </form>
+    </div>
+    <div id="divIndex" class="util">
+      <form name="formWIFI" id="formWIFI" action="/SET/wifi" method="GET">
+        <div class="form-group">
+          <label for="nomewifi" id="labelNomewifi">Rede WiFi:</label>
+          <select name="nomewifi" id="nomewifi" required maxlength="50"></select>
+        </div>
+        <div class="form-group">
+          <label for="inpSenha" id="labelSenha">Senha do WiFi:</label>
+          <div class="input-with-image">
+            <input type="password" required name="inpSenha" id="inpSenha" maxlength="50">
+            <div id="imgSenha" class="img-over-input"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="cNome">Nome da Central:</label>
+          <input type="text" name="cNome" id="cNome" required maxlength="50">
+        </div>
+        <div class="custom-separator"><span>Acesso externo</span></div>
+        <input type="hidden" name="userChoice" id="userChoice">
+        <div class="form-group">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="authMode" id="authInterno" value="interno" checked>
+            <label class="form-check-label" for="authInterno">Usar token interno</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="authMode" id="authCustom" value="custom">
+            <label class="form-check-label" for="authCustom">Definir senha + e-mail</label>
+          </div>
+        </div>
+        <div id="boxTokenInterno" class="form-group">
+          <div class="form-group">
+            <label for="tokenFixo">Token interno:</label>
+            <input type="text" name="tokenFixo" id="tokenFixo" readonly>
+          </div>
+          <small>Senha será a mesma do seu WiFi.</small>
+        </div>
+        <div id="boxCredenciais" class="form-group" style="display:none">
+          <div class="form-group">
+            <label for="userTk">e-Mail (válido):</label>
+            <input type="email" name="userTk" id="userTk" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="inpPassTk">Senha:</label>
+            <div class="input-with-image">
+              <input type="password" name="inpPassTk" id="inpPassTk" maxlength="50">
+              <div id="imgPassTk" class="img-over-input"></div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-separator"><span>Dispositivo 1</span></div>
+        <div class="form-group">
+          <label for="dNome1">Nome do Dispositivo:</label>
+          <input type="text" name="dNome1" id="dNome1" required maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="dTipo1">Tipo de Dispositivo:</label>
+          <select name="dTipo1" id="dTipo1" maxlength="50">
+            <option value="1" selected>Liga/Desliga</option>
+            <option value="2">Pulso</option>
+            <option value="3">Temporizador</option>
+          </select>
+        </div>
+        <div class="form-group" id="divTempo1" >
+            <label for="dTempo1">Tempo:</label>
+            <input type="number" required name="dTempo1" id="dTempo1" value="10" max="900" min="1" maxlength="50">
+        </div>
+        <div class="custom-separator"><span>Dispositivo 2</span></div>
+        <div class="form-group">
+          <label for="dNome2">Nome do Dispositivo:</label>
+          <input type="text" name="dNome2" id="dNome2" required maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="dTipo2">Tipo de Dispositivo:</label>
+          <select name="dTipo2" id="dTipo2" maxlength="50">
+            <option value="1" selected>Liga/Desliga</option>
+            <option value="2">Pulso</option>
+            <option value="3">Temporizador</option>
+          </select>
+        </div>
+        <div class="form-group" id="divTempo2" >
+            <label for="dTempo2">Tempo:</label>
+            <input type="number" required name="dTempo2" id="dTempo2" value="10" max="900" min="1" maxlength="50">
+        </div>
+        <div class="custom-separator"><span>Dispositivo 3</span></div>
+        <div class="form-group">
+          <label for="dNome3">Nome do Dispositivo:</label>
+          <input type="text" name="dNome3" id="dNome3" required maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="dTipo3">Tipo de Dispositivo:</label>
+          <select name="dTipo3" id="dTipo3" maxlength="50">
+            <option value="1" selected>Liga/Desliga</option>
+            <option value="2">Pulso</option>
+            <option value="3">Temporizador</option>
+          </select>
+        </div>
+        <div class="form-group" id="divTempo3" >
+            <label for="dTempo3">Tempo:</label>
+            <input type="number" required name="dTempo3" id="dTempo3" value="10" max="900" min="1" maxlength="50">
+        </div>
+        <div class="custom-separator"><span></span></div>
+        <div class="form-group">    
+          <button type="submit" class="btn-custom"><span id="iconSave"></span>Salvar</button>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btnCancelar" class="btn-custom"><span id="iconCancelar"></span>Cancelar</button>
+        </div>
+      </form>
+    </div>
+    <div class="util" id="divAviso"><br><br><h3>Aviso Importante</h3><br><div id="divResultado" class="message"></div></div>
+    <div class="util" id="divAguarde"><div id="iconeAguarde"></div></div>
+    <div class="rodape" id="divRodape"><img src="/img/logomarca" width="40px" height="40px"></div>
+  </body>
+</html>
