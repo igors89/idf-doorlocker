@@ -9,49 +9,6 @@ namespace WebManager {
     static int fd_onclosed = 0;
     static uint32_t current_token = 0;
     static uint32_t gerarTokenNumerico() {return 10000000 + (esp_random() % 90000000);}
-    // Função para decodificar strings URL-encoded
-    std::string url_decode(const std::string& encoded_string) {
-        std::string decoded_string;
-        for (size_t i = 0; i < encoded_string.length(); ++i) {
-            if (encoded_string[i] == '%') {
-                if (i + 2 < encoded_string.length()) {
-                    char hex_char1 = encoded_string[i+1];
-                    char hex_char2 = encoded_string[i+2];
-                    char decoded_char = 0;
-                    if (hex_char1 >= '0' && hex_char1 <= '9') decoded_char = (hex_char1 - '0') << 4;
-                    else if (hex_char1 >= 'a' && hex_char1 <= 'f') decoded_char = (hex_char1 - 'a' + 10) << 4;
-                    else if (hex_char1 >= 'A' && hex_char1 <= 'F') decoded_char = (hex_char1 - 'A' + 10) << 4;
-                    if (hex_char2 >= '0' && hex_char2 <= '9') decoded_char |= (hex_char2 - '0');
-                    else if (hex_char2 >= 'a' && hex_char2 <= 'f') decoded_char |= (hex_char2 - 'a' + 10);
-                    else if (hex_char2 >= 'A' && hex_char2 <= 'F') decoded_char |= (hex_char2 - 'A' + 10);
-                    decoded_string += decoded_char;
-                    i += 2;
-                } else {
-                    decoded_string += encoded_string[i];
-                }
-            } else if (encoded_string[i] == '+') {
-                decoded_string += ' ';
-            } else {
-                decoded_string += encoded_string[i];
-            }
-        }
-        return decoded_string;
-    }
-    // Função para extrair um valor de um corpo de requisição POST URL-encoded
-    std::string extract_post_param(const std::string& body, const std::string& key) {
-        size_t start_pos = 0;
-        std::string search_key = key + "=";
-        while ((start_pos = body.find(search_key, start_pos)) != std::string::npos) {
-            if (start_pos == 0 || body[start_pos - 1] == '&') {
-                size_t value_start = start_pos + search_key.length();
-                size_t value_end = body.find('&', value_start);
-                std::string encoded_value = body.substr(value_start, value_end - value_start);
-                return url_decode(encoded_value);
-            }
-            start_pos += search_key.length();
-        }
-        return "";
-    }
     // --- Handler genérico para servir arquivos estáticos da PSRAM ---
     static esp_err_t serve_static_file_handler(httpd_req_t* req) {
         std::string uri = req->uri;
@@ -257,6 +214,7 @@ namespace WebManager {
         if (server) { ESP_LOGW(TAG, "Servidor já em execução"); return; }
         httpd_config_t config = HTTPD_DEFAULT_CONFIG();
         config.server_port = 80;
+        config.max_uri_handlers=20;
         config.lru_purge_enable = true;
         config.uri_match_fn = httpd_uri_match_wildcard;
         config.max_uri_handlers = 30;
@@ -265,10 +223,6 @@ namespace WebManager {
         // 1. Rotas estáticas principais (HTML/CSS/JS/IMG)
         registerUriHandler("/",HTTP_GET,root_handler);
         registerUriHandler("/index.html",HTTP_GET,serve_static_file_handler);
-        registerUriHandler("/agenda.html",HTTP_GET,serve_static_file_handler);
-        registerUriHandler("/automacao.html",HTTP_GET,serve_static_file_handler);
-        registerUriHandler("/atualizar.html*",HTTP_GET,serve_static_file_handler);
-        registerUriHandler("/central.html",HTTP_GET,serve_static_file_handler);
         registerUriHandler("/css/*",HTTP_GET,serve_static_file_handler);
         registerUriHandler("/js/*",HTTP_GET,serve_static_file_handler);
         registerUriHandler("/img/*",HTTP_GET,serve_static_file_handler);

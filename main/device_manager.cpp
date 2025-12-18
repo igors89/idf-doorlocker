@@ -9,17 +9,26 @@ namespace DeviceManager{
     #define BUZZER_ACTIVE    0
     #define BUZZER_INACTIVE  1
     #define BUZZER_MS        100
+
+    // Configurações de Beep e Lógica
+    #define BEEP_LONG_MS     1000
+    #define PASS_LEN         6
+    #define INPUT_TIMEOUT_MS 3000
+    #define INTERVAL         500
     static esp_timer_handle_t buzzer_timer=nullptr;
     // devices
     // static const gpio_num_t OUTPUT_DEV[4]={GPIO_NUM_41,GPIO_NUM_42,GPIO_NUM_40,GPIO_NUM_39};
-    static const touch_pad_t BUTTON_DEV[6]={TOUCH_PAD_NUM4,TOUCH_PAD_NUM5,TOUCH_PAD_NUM6,TOUCH_PAD_NUM7,TOUCH_PAD_NUM8,TOUCH_PAD_NUM9};
-    static esp_timer_handle_t timers[6]={nullptr,nullptr,nullptr,nullptr,nullptr,nullptr};
+    static const touch_pad_t BUTTON_DEV[6]={TOUCH_PAD_NUM4,TOUCH_PAD_NUM5,TOUCH_PAD_NUM6,TOUCH_PAD_NUM7,TOUCH_PAD_NUM8,TOUCH_PAD_NUM1};
     static uint32_t last_press_time[6]={0,0,0,0,0,0};
     static const uint32_t DEBOUNCE_MS=200;
     static touch_button_handle_t button_handle[6];
     static QueueHandle_t touch_queue=nullptr;
     static QueueHandle_t storage_event_queue=nullptr;
     static void storage_event_task(void* arg);
+    // Variáveis de controle da senha
+    static char password_buffer[PASS_LEN+1]={0};    
+    static uint8_t input_count = 0;
+    static int64_t last_input_time = 0;
     // inicializações
     // static void init_gpios(){
     //     for (int i = 0; i < 4; ++i) {
@@ -72,19 +81,13 @@ namespace DeviceManager{
         gpio_set_level(BUZZER_GPIO,BUZZER_ACTIVE);
         esp_timer_start_once(buzzer_timer,(uint64_t)ms*1000ULL);
     }
-    // devices
-    static void handlerDev(uint8_t dev_id){
-        const Device* device_ptr = StorageManager::getDevice(std::to_string(dev_id));
-        if (device_ptr) {
-            DeviceDTO device_dto;
-            memcpy(&device_dto, device_ptr, sizeof(DeviceDTO));
-            if(device_dto.type==1){device_dto.status=1-device_dto.status;}else{device_dto.status=1;}
-            RequestSave requester;
-            requester.requester=dev_id;
-            requester.request_int=dev_id;
-            requester.resquest_type=RequestTypes::REQUEST_INT;
-            StorageManager::enqueueRequest(StorageCommand::SAVE,StorageStructType::DEVICE_DATA,&device_dto,sizeof(DeviceDTO),requester,EventId::STO_DEVICESAVED);
-        }       
+    // Auxiliar para tocar a sequência de sucesso (3 beeps curtos)
+    static void play_success_sequence(){
+        for(int i=0; i<3; i++){
+            buzzer_beep_nonblocking(BUZZER_MS);
+            // Delay pequeno para criar o intervalo entre beeps (beep + pausa)
+            vTaskDelay(pdMS_TO_TICKS(BUZZER_MS*2));
+        }
     }
     static void touch_event_cb(touch_button_handle_t handle, touch_button_message_t *msg, void *arg){
         if (msg->event != TOUCH_BUTTON_EVT_ON_PRESS) return;
@@ -92,30 +95,73 @@ namespace DeviceManager{
         int64_t now_ms = esp_timer_get_time() / 1000;
         if ((now_ms - last_press_time[dev]) >= (int64_t)DEBOUNCE_MS) {
             last_press_time[dev] = now_ms;
-            uint8_t d = dev;
+            uint8_t d = dev+1;
             xQueueSendFromISR(touch_queue,&d,NULL);
-            ESP_LOGI(TAG, "Touch detected - device %d", dev);
+            // ESP_LOGI(TAG, "Touch detected");
         }
     }
     static void touch_task(void*){
         uint8_t dev;
-        for(;;){if(xQueueReceive(touch_queue,&dev,portMAX_DELAY)){
-            buzzer_beep_nonblocking(BUZZER_MS);ESP_LOGI(TAG, "Botão Touch pressionado: %d", dev + 1);}
-        }
-    }
-    static void timer_callback(void* arg){
-        int dev_id = *(int*)arg;
-        free(arg);
-        const Device* device_ptr = StorageManager::getDevice(std::to_string(dev_id));
-        if(device_ptr){
-            DeviceDTO device_dto;
-            memcpy(&device_dto, device_ptr, sizeof(DeviceDTO));
-            device_dto.status=0;
-            RequestSave requester;
-            requester.requester=dev_id;
-            requester.request_int=dev_id;
-            requester.resquest_type=RequestTypes::REQUEST_INT;
-            StorageManager::enqueueRequest(StorageCommand::SAVE,StorageStructType::DEVICE_DATA,&device_dto,sizeof(DeviceDTO),requester,EventId::STO_DEVICESAVED);
+        for(;;){
+            if(xQueueReceive(touch_queue,&dev,pdMS_TO_TICKS(100)) == pdTRUE){
+                
+                buzzer_beep_nonblocking(BUZZER_MS);
+                ESP_LOGI(TAG, "Botão Touch pressionado: %d", dev);
+
+                int64_t now = esp_timer_get_time() / 1000;
+
+                // Beep de feedback visual/sonoro do clique
+                buzzer_beep_nonblocking(BUZZER_MS); 
+                ESP_LOGI(TAG, "Tecla pressionada: %d", dev);
+
+                // Se passou muito tempo desde o último dígito (sem ter estourado o timeout no else), reseta
+                if(input_count > 0 && (now - last_input_time > INPUT_TIMEOUT_MS)){
+                     ESP_LOGW(TAG, "Timeout entre cliques (reset forçado). Reiniciando buffer.");
+                     input_count = 0;
+                }
+
+                last_input_time = now;
+
+                // Armazena no buffer
+                if(input_count < PASS_LEN){
+                    password_buffer[input_count++] = (char)(dev + '0');
+                }
+
+                // Verifica se completou a senha
+                if(input_count == PASS_LEN){
+                    ESP_LOGI(TAG, "Senha de 6 digitos recebida = %s. Sucesso!", password_buffer);
+                    play_success_sequence();
+
+                    vTaskDelay(pdMS_TO_TICKS(INTERVAL));
+
+                    xQueueReset(touch_queue);
+                    
+                    // TODO: Aqui você validaria a senha no futuro
+                    // Por enquanto apenas reseta para a próxima tentativa
+                    input_count = 0;
+                    memset(password_buffer, 0, sizeof(password_buffer));
+                    last_input_time = esp_timer_get_time() / 1000;
+                }
+            } else {
+                // Timeout da Queue (Nenhum botão apertado nos últimos 100ms)
+                if(input_count > 0){
+                    int64_t now = esp_timer_get_time() / 1000;
+                    if((now - last_input_time) > INPUT_TIMEOUT_MS){
+                        ESP_LOGW(TAG, "Timeout de 3s excedido! Rejeitando entrada.");
+                        
+                        // Beep longo de rejeição
+                        buzzer_beep_nonblocking(BEEP_LONG_MS);
+                        vTaskDelay(pdMS_TO_TICKS(INTERVAL));
+
+                        xQueueReset(touch_queue);
+                        
+                        // Reseta o processo
+                        input_count = 0;
+                        memset(password_buffer, 0, sizeof(password_buffer));
+                        last_input_time = esp_timer_get_time() / 1000;
+                    }
+                }
+            }
         }
     }
     //eventos
@@ -123,42 +169,13 @@ namespace DeviceManager{
         int devsen_id;
         for(;;){
             if(xQueueReceive(storage_event_queue,&devsen_id,portMAX_DELAY)==pdTRUE){
-                if(devsen_id<4){
-                    const Device* device_ptr=StorageManager::getDevice(std::to_string(devsen_id));
-                    if(device_ptr){
-                        DeviceDTO device_dto;
-                        memcpy(&device_dto,device_ptr,sizeof(DeviceDTO));
-                        if(device_dto.status==0){                            
-                            // gpio_set_level(OUTPUT_DEV[devsen_id],1);
-                            if(timers[devsen_id]){
-                                esp_timer_stop(timers[devsen_id]);
-                                esp_timer_delete(timers[devsen_id]);
-                                timers[devsen_id] = nullptr;
-                            }
-                        }else{
-                            // gpio_set_level(OUTPUT_DEV[devsen_id],0);                            
-                            uint32_t timeout_ms;
-                            if(device_dto.type==2)timeout_ms=100;
-                            else if(device_dto.type==3)timeout_ms=device_dto.time*1000;
-                            else timeout_ms=0;
-                            if (timeout_ms > 0) {
-                                int *dev_id_ptr = (int*) malloc(sizeof(int));
-                                *dev_id_ptr = devsen_id;
-                                esp_timer_create_args_t timer_args={.callback=timer_callback,.arg=dev_id_ptr,.dispatch_method=ESP_TIMER_TASK,.name="device_timer",.skip_unhandled_events=true};
-                                esp_timer_create(&timer_args, &timers[devsen_id]);
-                                esp_timer_start_once(timers[devsen_id], timeout_ms * 1000);
-                            }
-                        }
-                    }
-                }
             }
         }
     }
     static void onStorageEvent(void*,esp_event_base_t,int32_t id,void* event_data){
         if(!event_data)return;
         EventId ev=static_cast<EventId>(id);
-        if(ev==EventId::STO_DEVICESAVED||ev==EventId::STO_SENSORSAVED){
-            EventBus::post(EventDomain::NETWORK, EventId::NET_RTCDEVREQUEST);
+        if(ev==EventId::STO_DEVICESAVED){
             RequestSave requester;
             memcpy(&requester,event_data,sizeof(RequestSave));
             if(requester.resquest_type!=RequestTypes::REQUEST_INT)return;

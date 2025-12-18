@@ -58,123 +58,6 @@ namespace Storage {
         p_psram->mime = m;
         StorageManager::registerPage(k, p_psram);
     }
-    static void loadDeviceFile(const std::string& stdPath, const std::string& deviceID) {
-        const char* path = stdPath.c_str();
-        ESP_LOGI(TAG, "disp para registrar: %s", deviceID.c_str());
-        const char* id_from_filename = deviceID.c_str();
-        FILE* f = fopen(path, "r");
-        if(!f){ESP_LOGW(TAG, "Arquivo de dispositivo ausente: %s", path);return;}
-        void* dev_mem = heap_caps_malloc(sizeof(Device), MALLOC_CAP_SPIRAM);
-        if(!dev_mem){ESP_LOGE(TAG, "Falha ao alocar PSRAM %s", id_from_filename);fclose(f);return;}
-        Device* dev = reinterpret_cast<Device*>(dev_mem);
-        memset(dev, 0, sizeof(Device));
-        strncpy(dev->id, id_from_filename, sizeof(dev->id) - 1);dev->id[sizeof(dev->id) - 1] = '\0';
-        char line[128];
-        int index = 0;
-        while (fgets(line, sizeof(line), f) && index < 6) {
-            line[strcspn(line, "\r\n")] = 0;
-            switch (index) {
-                case 0:strncpy(dev->name, line, sizeof(dev->name) - 1);dev->name[sizeof(dev->name) - 1] = '\0';break;
-                case 1:dev->type = static_cast<uint8_t>(atoi(line));break;
-                case 2:dev->time = static_cast<uint16_t>(atoi(line));break;
-                case 3:dev->status = static_cast<uint8_t>(atoi(line));break;
-                case 4:strncpy(dev->x_str, line, sizeof(dev->x_str) - 1);dev->x_str[sizeof(dev->x_str) - 1] = '\0';break;
-                case 5:dev->x_int = static_cast<uint8_t>(atoi(line));break;
-            }
-            ++index;
-        }
-        fclose(f);
-        StorageManager::registerDevice(dev);
-    }
-    void loadAllDevices() {
-        const char* dir_path = "/littlefs/device";
-        DIR* dir = opendir(dir_path);
-        if(!dir){ESP_LOGW(TAG, "Diretório /device não encontrado");return;}
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {continue;}
-            char full_path[512];
-            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
-            ESP_LOGI(TAG,"nome disp:%s ",entry->d_name);
-            loadDeviceFile(std::string(full_path), std::string(entry->d_name));
-        }
-        closedir(dir);
-        ESP_LOGI(TAG, "Total de dispositivos: %zu", StorageManager::getDeviceCount());
-    }
-    esp_err_t saveDeviceFile(Device* device) {
-        if (!device) {ESP_LOGE(TAG, "Ponteiro de dispositivo nulo para salvar.");return ESP_ERR_INVALID_ARG;}
-        std::string full_path = std::string("/littlefs/device/") + std::string(device->id);
-        const char* file_path = full_path.c_str();
-        FILE* f = fopen(file_path, "w");
-        if (!f) {ESP_LOGE(TAG, "Falha ao abrir arquivo para escrita: %s", file_path);return ESP_FAIL;}
-        fprintf(f, "%s\n", device->name);
-        fprintf(f, "%u\n", device->type);
-        fprintf(f, "%u\n", device->time);
-        fprintf(f, "%u\n", device->status);
-        fprintf(f, "%s\n", device->x_str);
-        fprintf(f, "%u\n", device->x_int);
-        fclose(f);
-        ESP_LOGI(TAG, "Dispositivo '%s' salvo em %s", device->id, file_path);
-        return ESP_OK;
-    }
-    static void loadSensorFile(std::string stdPath, std::string sensorID) {
-        const char* path = stdPath.c_str();
-        ESP_LOGI(TAG, "sens para registrar: %s", sensorID.c_str());
-        const char* id_from_filename = sensorID.c_str();
-        FILE* f = fopen(path, "r");
-        if(!f){ESP_LOGW(TAG, "Arquivo de sensor ausente: %s", path);return;}
-        void* sen_mem = heap_caps_malloc(sizeof(Sensor), MALLOC_CAP_SPIRAM);
-        if(!sen_mem){ESP_LOGE(TAG, "Falha ao alocar PSRAM %s", id_from_filename);fclose(f);return;}
-        Sensor* sen = reinterpret_cast<Sensor*>(sen_mem);
-        memset(sen, 0, sizeof(Sensor));
-        strncpy(sen->id,id_from_filename,sizeof(sen->id)-1);sen->id[sizeof(sen->id) - 1] = '\0';
-        char line[128];
-        int index = 0;
-        while (fgets(line, sizeof(line), f) && index < 6) {
-            line[strcspn(line, "\r\n")] = 0;
-            switch (index) {
-                case 0:strncpy(sen->name, line, sizeof(sen->name) - 1);sen->name[sizeof(sen->name) - 1] = '\0';break;
-                case 1:sen->type = static_cast<uint8_t>(atoi(line));break;
-                case 2:sen->time = static_cast<uint16_t>(atoi(line));break;
-                case 3:sen->x_int = static_cast<uint8_t>(atoi(line));break;
-                case 4:strncpy(sen->x_str, line, sizeof(sen->x_str) - 1);sen->x_str[sizeof(sen->x_str) - 1] = '\0';break;
-            }
-            ++index;
-        }
-        fclose(f);
-        StorageManager::registerSensor(sen);
-    }
-    void loadAllSensors() {
-        const char* dir_path = "/littlefs/sensor";
-        DIR* dir = opendir(dir_path);
-        if(!dir){ESP_LOGW(TAG, "Diretório /sensor não encontrado");return;}
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {continue;}
-            char full_path[512];
-            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
-            ESP_LOGI(TAG,"nome sens:%s ",entry->d_name);
-            loadSensorFile(std::string(full_path), std::string(entry->d_name));
-        }
-        closedir(dir);
-        ESP_LOGI(TAG, "Total de sensores: %zu", StorageManager::getSensorCount());
-    }
-    esp_err_t saveSensorFile(Sensor* sensor) {
-        if (!sensor) {ESP_LOGE(TAG, "Ponteiro de sensor nulo para salvar.");return ESP_ERR_INVALID_ARG;}
-        std::string full_path = std::string("/littlefs/sensor/") + std::string(sensor->id);
-        const char* file_path = full_path.c_str();
-        FILE* f = fopen(file_path, "w");
-        if (!f) {ESP_LOGE(TAG, "Falha ao abrir arquivo para escrita: %s", file_path);return ESP_FAIL;}
-        // ainda tem que ver como sensor vem...
-        fprintf(f, "%s\n", sensor->name);
-        fprintf(f, "%u\n", sensor->type);
-        fprintf(f, "%u\n", sensor->time);
-        fprintf(f, "%u\n", sensor->x_int);
-        fprintf(f, "%s\n", sensor->x_str);
-        fclose(f);
-        ESP_LOGI(TAG,"Sensor '%s' salvo em %s",sensor->id,file_path);
-        return ESP_OK;
-    }
     esp_err_t saveGlobalConfigFile(GlobalConfig* cfg) {
         if(!cfg){ESP_LOGE(TAG,"Ponteiro GlobalConfig nulo na salva.");return ESP_ERR_INVALID_ARG;}
         const char* path = "/littlefs/config/config";
@@ -210,10 +93,6 @@ namespace Storage {
         loadGlobalConfigFile();
         loadCredentialConfigFile();
         loadFileToPsram("/littlefs/index.html","index.html","text/html");
-        loadFileToPsram("/littlefs/agenda.html","agenda.html","text/html");
-        loadFileToPsram("/littlefs/automacao.html","automacao.html","text/html");
-        loadFileToPsram("/littlefs/atualizar.html","atualizar.html","text/html");
-        loadFileToPsram("/littlefs/central.html","central.html","text/html");
         loadFileToPsram("/littlefs/css/igra.css","css/igra.css","text/css");
         loadFileToPsram("/littlefs/css/bootstrap.min.css","css/bootstrap.min.css","text/css");
         loadFileToPsram("/littlefs/js/messages.js","js/messages.js","application/javascript");
@@ -224,8 +103,8 @@ namespace Storage {
         loadFileToPsram("/littlefs/ha/apiget.json","apiget.json","application/json");
         loadFileToPsram("/littlefs/ha/lights_all.json", "lights_all.json", "application/json");
         loadFileToPsram("/littlefs/ha/light_detail.json", "light_detail.json", "application/json");
-        loadAllDevices();
-        loadAllSensors();
+        // loadAllDevices();
+        // loadAllSensors();
         ESP_LOGI(TAG, "Arquivos carregados na PSRAM.");
         return ESP_OK;
     }

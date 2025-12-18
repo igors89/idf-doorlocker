@@ -27,20 +27,13 @@
         document.getElementById('imgSenha').addEventListener('click',showPass);
         document.getElementById('imgPassTk').addEventListener('click',showPassTk);
         document.getElementById("btnDispositivo").addEventListener("click",()=>handleLoginAndRedirect(null));
-        document.getElementById("btnCentral").addEventListener("click",()=>handleLoginAndRedirect('central.html'));
-        document.getElementById("btnAgenda").addEventListener("click",()=>handleLoginAndRedirect('agenda.html'));
-        document.getElementById("btnAutomacao").addEventListener("click",()=>handleLoginAndRedirect('automacao.html'));
-        document.getElementById("btnAtualizar").addEventListener("click",()=>handleLoginAndRedirect('atualizar.html'));
         document.getElementById('btnSair').addEventListener("click",exit);
         document.getElementById('btnCancelar').addEventListener("click",getCancel);
         document.getElementById('formWIFI').addEventListener('submit',netTest);
-        document.getElementById('dTipo1').addEventListener("change",showTime1);
-        document.getElementById('dTipo2').addEventListener("change",showTime2);
-        document.getElementById('dTipo3').addEventListener("change",showTime3);
         document.getElementById('authInterno').addEventListener('change',updateAuthMode);
         document.getElementById('authCustom').addEventListener('change',updateAuthMode);
-        // window.addEventListener("unload",getExit);
-        // document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){getExit();}});
+        window.addEventListener("unload",getExit);
+        document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){getExit();}});
         socket.addEventListener('open',function(event){socket.send(host);socket.send("NET");timeoutId=setTimeout(()=>{showMessage('erroCom');},20000);});
         // funções
         function updateAuthMode(){
@@ -54,13 +47,13 @@
           if(mail)mail.required=!interno;
         }
         function exit(){
-          // getExit();
+          getExit();
           showDiv('divAguarde');
           window.close(); 
         }
-        // function getExit(){
-        //   navigator.sendBeacon("/encerrar/"+fileDescriptor);
-        // }
+        function getExit(){
+          navigator.sendBeacon("/encerrar/"+fileDescriptor);
+        }
         function getCancel(){
           event.preventDefault();
           window.location.href=`index.html`;
@@ -99,15 +92,6 @@
             }else{alert("ERRO! Senha incorreta!");}
           })
           .catch(err=>{showMessage('erroCom');});
-        }
-        function showTime1(){
-          if (document.getElementById('divTempo1')){divTempo1.style.display=(document.getElementById('dTipo1').value==='3') ? 'flex':'none';}
-        }
-        function showTime2(){
-          if (document.getElementById('divTempo2')){divTempo2.style.display=(document.getElementById('dTipo2').value==='3') ? 'flex':'none';}
-        }
-        function showTime3(){
-          if (document.getElementById('divTempo3')){divTempo3.style.display=(document.getElementById('dTipo3').value==='3') ? 'flex':'none';}
         }
         function netTest(event){
           showDiv('divAguarde');
@@ -172,15 +156,6 @@
               else{
                 data=JSON.parse(msg);
                 document.getElementById('cNome').value=data.cNome;
-                document.getElementById('dNome1').value=data.dNome1;
-                document.getElementById('dTipo1').value=data.dTipo1;
-                document.getElementById('dTempo1').value=data.dTempo1;
-                document.getElementById('dNome2').value=data.dNome2;
-                document.getElementById('dTipo2').value=data.dTipo2;
-                document.getElementById('dTempo2').value=data.dTempo2;
-                document.getElementById('dNome3').value=data.dNome3;
-                document.getElementById('dTipo3').value=data.dTipo3;
-                document.getElementById('dTempo3').value=data.dTempo3;
                 document.getElementById('inpPassTk').value=data.passToken;
                 document.getElementById('userTk').value=data.userToken;
                 document.getElementById('tokenFixo').value=data.token;
@@ -234,19 +209,7 @@
           </div>
         </div><br>
         <div class="form-group">
-          <button type="button" id="btnCentral" class="btn-custom"><span id="iconCentral"></span>Painel Controle</button>
-        </div>
-        <div class="form-group">
           <button type="button" id="btnDispositivo" class="btn-custom"><span id="iconDispositivo"></span>Configuração</button>
-        </div>
-        <div class="form-group">
-          <button type="button" id="btnAgenda" class="btn-custom"><span id="iconAgenda"></span>Agendamento</button>
-        </div>
-        <div class="form-group">
-          <button type="button" id="btnAutomacao" class="btn-custom"><span id="iconAutoma"></span>Automação</button>
-        </div>
-        <div class="form-group">
-          <button type="button" id="btnAtualizar" class="btn-custom"><span id="iconAtualiza"></span>Atualizar Central</button>
         </div>
         <div class="form-group">
           <button type="button" id="btnSair" class="btn-custom"><span id="iconSair"></span>Sair</button>
@@ -267,7 +230,7 @@
           </div>
         </div>
         <div class="form-group">
-          <label for="cNome">Nome da Central:</label>
+          <label for="cNome">Nome do Dispositivo:</label>
           <input type="text" name="cNome" id="cNome" required maxlength="50">
         </div>
         <div class="custom-separator"><span>Acesso externo</span></div>
@@ -302,58 +265,6 @@
             </div>
           </div>
         </div>
-        <div class="custom-separator"><span>Dispositivo 1</span></div>
-        <div class="form-group">
-          <label for="dNome1">Nome do Dispositivo:</label>
-          <input type="text" name="dNome1" id="dNome1" required maxlength="50">
-        </div>
-        <div class="form-group">
-          <label for="dTipo1">Tipo de Dispositivo:</label>
-          <select name="dTipo1" id="dTipo1" maxlength="50">
-            <option value="1" selected>Liga/Desliga</option>
-            <option value="2">Pulso</option>
-            <option value="3">Temporizador</option>
-          </select>
-        </div>
-        <div class="form-group" id="divTempo1" >
-            <label for="dTempo1">Tempo:</label>
-            <input type="number" required name="dTempo1" id="dTempo1" value="10" max="900" min="1" maxlength="50">
-        </div>
-        <div class="custom-separator"><span>Dispositivo 2</span></div>
-        <div class="form-group">
-          <label for="dNome2">Nome do Dispositivo:</label>
-          <input type="text" name="dNome2" id="dNome2" required maxlength="50">
-        </div>
-        <div class="form-group">
-          <label for="dTipo2">Tipo de Dispositivo:</label>
-          <select name="dTipo2" id="dTipo2" maxlength="50">
-            <option value="1" selected>Liga/Desliga</option>
-            <option value="2">Pulso</option>
-            <option value="3">Temporizador</option>
-          </select>
-        </div>
-        <div class="form-group" id="divTempo2" >
-            <label for="dTempo2">Tempo:</label>
-            <input type="number" required name="dTempo2" id="dTempo2" value="10" max="900" min="1" maxlength="50">
-        </div>
-        <div class="custom-separator"><span>Dispositivo 3</span></div>
-        <div class="form-group">
-          <label for="dNome3">Nome do Dispositivo:</label>
-          <input type="text" name="dNome3" id="dNome3" required maxlength="50">
-        </div>
-        <div class="form-group">
-          <label for="dTipo3">Tipo de Dispositivo:</label>
-          <select name="dTipo3" id="dTipo3" maxlength="50">
-            <option value="1" selected>Liga/Desliga</option>
-            <option value="2">Pulso</option>
-            <option value="3">Temporizador</option>
-          </select>
-        </div>
-        <div class="form-group" id="divTempo3" >
-            <label for="dTempo3">Tempo:</label>
-            <input type="number" required name="dTempo3" id="dTempo3" value="10" max="900" min="1" maxlength="50">
-        </div>
-        <div class="custom-separator"><span></span></div>
         <div class="form-group">    
           <button type="submit" class="btn-custom"><span id="iconSave"></span>Salvar</button>
         </div>

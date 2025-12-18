@@ -13,20 +13,6 @@ namespace SocketManager {
         cJSON_AddStringToObject(root, "passToken", StorageManager::cfg->token_password);
         cJSON_AddStringToObject(root, "useUserToken", StorageManager::cfg->token_flag);
         cJSON_AddStringToObject(root, "token", StorageManager::id_cfg->id);
-        for (int i = 1; i <= 3; ++i) {
-            std::string device_id_str = std::to_string(i);
-            const Device* dev = StorageManager::getDevice(device_id_str);
-            if (dev) {
-                cJSON_AddNumberToObject(root, ("dTipo" + device_id_str).c_str(), dev->type);
-                cJSON_AddStringToObject(root, ("dNome" + device_id_str).c_str(), dev->name);
-                cJSON_AddNumberToObject(root, ("dTempo" + device_id_str).c_str(), dev->time);
-            } else {
-                ESP_LOGW(TAG, "Dispositivo interno %d não encontrado.", i);
-                cJSON_AddStringToObject(root, ("dTipo" + device_id_str).c_str(), "0");
-                cJSON_AddStringToObject(root, ("dNome" + device_id_str).c_str(), "");
-                cJSON_AddStringToObject(root, ("dTempo" + device_id_str).c_str(), "0");
-            }
-        }
         if(StorageManager::scanCache->is_sta_connected){
             cJSON_AddStringToObject(root, "conexao", "con");
         } else {
@@ -219,25 +205,6 @@ namespace SocketManager {
             cJSON* root = cJSON_Parse(jsonString);
             if (root == nullptr) {ESP_LOGE(TAG, "Falha ao fazer parse do JSON CONFIG"); ret = ESP_FAIL;}
             else {
-                for (int i = 1; i <= 3; ++i) {
-                    DeviceDTO device_dto;
-                    snprintf(device_dto.id, sizeof(device_dto.id), "%d", i);
-                    std::string dNomeKey="dNome"+std::to_string(i);
-                    std::string dTipoKey="dTipo"+std::to_string(i);
-                    std::string dTempoKey="dTempo"+std::to_string(i);
-                    cJSON* dNome=cJSON_GetObjectItem(root,dNomeKey.c_str());
-                    cJSON* dTipo=cJSON_GetObjectItem(root,dTipoKey.c_str());
-                    cJSON* dTempo=cJSON_GetObjectItem(root,dTempoKey.c_str());
-                    if(dNome&&dNome->valuestring){strncpy(device_dto.name,dNome->valuestring,sizeof(device_dto.name)-1);device_dto.name[sizeof(device_dto.name)-1]='\0';}
-                    if(dTipo&&dTipo->valuestring){device_dto.type=std::stoi(dTipo->valuestring);}
-                    if(dTempo&&dTempo->valuestring){device_dto.time=std::stoi(dTempo->valuestring);}
-                    device_dto.status = 0;
-                    RequestSave requester;requester.requester=fd;requester.request_int=i;requester.resquest_type=RequestTypes::REQUEST_INT;
-                    esp_err_t device_ret = StorageManager::enqueueRequest(StorageCommand::SAVE,StorageStructType::DEVICE_DATA,&device_dto,sizeof(DeviceDTO),requester,EventId::STO_DEVICESAVED);
-                    if (device_ret != ESP_OK) {ESP_LOGE(TAG, "Falha ao enfileirar requisição para Device %d", i);}
-                    else {ESP_LOGI(TAG, "Requisição para Device %d enfileirada com sucesso", i);}
-                    vTaskDelay(pdMS_TO_TICKS(20));
-                }
                 GlobalConfigDTO config_dto;
                 cJSON* cn = cJSON_GetObjectItem(root, "cNome");
                 cJSON* tf = cJSON_GetObjectItem(root, "userChoice");

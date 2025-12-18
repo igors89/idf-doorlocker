@@ -28,10 +28,6 @@
 #define MAX_TOKEN_PASSWORD_LEN          65
 #define MAX_TOKEN_FLAG_LEN               2
 #define MAX_HTML_OPTIONS_BUFFER_SIZE  8192
-#define MAX_FILE_PATH_LEN               64
-#define MAX_MQTT_CLIENT_ID_LEN          23
-#define MAX_MQTT_TOPIC_LEN              64
-#define MAX_DEVICE_ID_LEN               23
 
 struct WifiScanCache {
     char* networks_html_ptr;
@@ -95,74 +91,6 @@ struct CredentialConfigDTO {
         memset(password, 0, sizeof(password));
     }
 };
-struct Device {
-    char id[MAX_ID_LEN];
-    char name[MAX_CENTRAL_NAME_LEN];
-    uint8_t type;
-    uint16_t time;
-    uint8_t status;
-    char x_str[MAX_ID_LEN];
-    uint8_t x_int;
-    Device() {
-        memset(id, 0, sizeof(id));
-        memset(name, 0, sizeof(name));
-        type = 0;
-        time = 0;
-        status = 0;
-        memset(x_str, 0, sizeof(x_str));
-        x_int = 0;
-    }
-};
-struct DeviceDTO {
-    char id[MAX_ID_LEN];
-    char name[MAX_CENTRAL_NAME_LEN];
-    uint8_t type;
-    uint16_t time;
-    uint8_t status;
-    char x_str[MAX_ID_LEN];
-    uint8_t x_int;
-    DeviceDTO() {
-        memset(id, 0, sizeof(id));
-        memset(name, 0, sizeof(name));
-        type = 0;
-        time = 0;
-        status = 0;
-        memset(x_str, 0, sizeof(x_str));
-        x_int = 0;
-    }
-};
-struct Sensor {
-    char id[MAX_ID_LEN];
-    char name[MAX_CENTRAL_NAME_LEN];
-    uint8_t type;
-    uint16_t time;
-    uint8_t x_int;
-    char x_str[MAX_ID_LEN];
-    Sensor() {
-        memset(id, 0, sizeof(id));
-        memset(name, 0, sizeof(name));
-        type = 0;
-        time = 0;
-        x_int = 0;
-        memset(x_str, 0, sizeof(x_str));
-    }
-};
-struct SensorDTO {
-    char id[MAX_ID_LEN];
-    char name[MAX_CENTRAL_NAME_LEN];
-    uint8_t type;
-    uint16_t time;
-    uint8_t x_int;
-    char x_str[MAX_ID_LEN];
-    SensorDTO() {
-        memset(id, 0, sizeof(id));
-        memset(name, 0, sizeof(name));
-        type = 0;
-        time = 0;
-        x_int = 0;
-        memset(x_str, 0, sizeof(x_str));
-    }
-};
 struct Page {
     void* data;
     size_t size;
@@ -179,30 +107,8 @@ struct testSSID {
         memset(pass, 0, sizeof(pass));
     }
 };
-struct CurrentTime {
-    int dayOfWeek; // 0 = Domingo
-    int hour;
-    int minute;
-    CurrentTime():dayOfWeek(0),hour(0),minute(0) {}
-};
-struct PublishBrokerData {
-    char device_id[MAX_MQTT_CLIENT_ID_LEN];
-    char payload[MAX_MQTT_TOPIC_LEN];
-    PublishBrokerData() {
-        memset(device_id, 0, sizeof(device_id));
-        memset(payload, 0, sizeof(payload));
-    }
-    PublishBrokerData(const char* id_cstr, const char* p_cstr) {
-        memset(device_id, 0, sizeof(device_id));
-        memset(payload, 0, sizeof(payload));
-        strncpy(device_id, id_cstr, sizeof(device_id) - 1);
-        strncpy(payload, p_cstr, sizeof(payload) - 1);
-        device_id[sizeof(device_id) - 1] = '\0';
-        payload[sizeof(payload) - 1] = '\0';
-    }
-};
 enum class StorageCommand {SAVE,DELETE};
-enum class StorageStructType {CONFIG_DATA,CREDENTIAL_DATA,SENSOR_DATA,DEVICE_DATA,AUTOMA_DATA,SCHEDULE_DATA};
+enum class StorageStructType {CONFIG_DATA,CREDENTIAL_DATA};
 enum class RequestTypes {REQUEST_NONE,REQUEST_INT,REQUEST_CHAR};
 struct RequestSave {
     int requester;
@@ -246,16 +152,6 @@ namespace StorageManager {
     // Funções para gerenciamento de páginas web
     void registerPage(const char* uri, Page* page);
     const Page* getPage(const char* uri);
-    // Funções para gerenciamento de dispositivos
-    void registerDevice(Device* device);
-    const Device* getDevice(const std::string& id);
-    size_t getDeviceCount();
-    std::vector<std::string> getDeviceIds();
-    // Funções para gerenciamento de sensores
-    void registerSensor(Sensor* sensor);
-    const Sensor* getSensor(const std::string& id);
-    size_t getSensorCount();
-    std::vector<std::string> getSensorIds();
     // Handlers de eventos
     void onNetworkEvent(void*, esp_event_base_t, int32_t id, void*);
     // Função para enfileirar requisições de armazenamento

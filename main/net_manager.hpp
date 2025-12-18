@@ -29,5 +29,4 @@ namespace NetManager
     esp_err_t init();
     static esp_err_t startAP();
     static void chage_timer_ap(TimerHandle_t xTimer);
-    std::vector<std::string> fetchFirmwareList();
 }

@@ -13,8 +13,6 @@ namespace StorageManager {
     static QueueHandle_t s_storage_queue = nullptr;
     static SemaphoreHandle_t s_flash_mutex = nullptr;
     static std::unordered_map<std::string, Page*> pageMap;
-    static std::unordered_map<std::string, Device*> deviceMap;
-    static std::unordered_map<std::string, Sensor*> sensorMap;
     // --- Funções de Utilidade ---
     bool isBlankOrEmpty(const char* str) {
         if (str == nullptr || str[0] == '\0') {return true;}
@@ -59,64 +57,6 @@ namespace StorageManager {
     const Page* getPage(const char* uri) {
         auto it = pageMap.find(uri);
         return (it != pageMap.end()) ? it->second : nullptr;
-    }
-    // --- Gerenciamento de Dispositivos ---
-    void registerDevice(Device* device) {
-        auto it = deviceMap.find(std::string(device->id));
-        if (it != deviceMap.end()) {
-            ESP_LOGW(TAG, "Dispositivo '%s' já existe. Liberando memória antiga.",device->id);
-            heap_caps_free(it->second);
-        }
-        deviceMap[std::string(device->id)] = device;
-        ESP_LOGI(TAG, "Disp regist:(ID=%s)(Nome=%s)(Tipo=%d)(Status=%d)(Tempo=%d)(x_int=%d)(x_str=%s)",device->id,device->name,device->type,device->status,device->time,device->x_int,device->x_str);
-    }
-    // Função pública para obter dispositivo
-    const Device* getDevice(const std::string& id) {
-        auto it = deviceMap.find(id);
-        return (it != deviceMap.end()) ? it->second : nullptr;
-    }
-    // Função interna para obter dispositivo
-    static Device* getMutableDeviceInternal(const std::string& id) {
-        auto it = deviceMap.find(id);
-        return (it != deviceMap.end()) ? it->second : nullptr;
-    }
-    size_t getDeviceCount() {
-        return deviceMap.size();
-    }
-    std::vector<std::string> getDeviceIds() {
-        std::vector<std::string> ids;
-        ids.reserve(deviceMap.size());
-        for (const auto& pair : deviceMap) {ids.push_back(pair.first);}
-        return ids;
-    }
-    // --- Gerenciamento de Sensores ---
-    void registerSensor(Sensor* sensor) {
-        auto it = sensorMap.find(std::string(sensor->id));
-        if (it != sensorMap.end()) {
-            ESP_LOGW(TAG, "Sensor '%s' já existe. Liberando memória antiga.",sensor->id);
-            heap_caps_free(it->second);
-        }
-        sensorMap[std::string(sensor->id)] = sensor;
-        ESP_LOGI(TAG, "Sensor registrado:(ID=%s)(Nome=%s)(Tipo=%d)(tempo=%d)(x_int=%d)(x_str=%s)",sensor->id,sensor->name,sensor->type,sensor->time,sensor->x_int,sensor->x_str);
-    }
-    // Função pública para obter sensor
-    const Sensor* getSensor(const std::string& id) {
-        auto it = sensorMap.find(id);
-        return (it != sensorMap.end()) ? it->second : nullptr;
-    }
-    // Função interna para obter dispositivo
-    static Sensor* getMutableSensorInternal(const std::string& id) {
-        auto it = sensorMap.find(id);
-        return (it != sensorMap.end()) ? it->second : nullptr;
-    }
-    size_t getSensorCount() {
-        return sensorMap.size();
-    }
-    std::vector<std::string> getSensorIds() {
-        std::vector<std::string> ids;
-        ids.reserve(sensorMap.size());
-        for (const auto& pair : sensorMap) {ids.push_back(pair.first);}
-        return ids;
     }
     // --- Handlers de Eventos ---
     void onNetworkEvent(void*, esp_event_base_t, int32_t id, void*) {
@@ -186,79 +126,6 @@ namespace StorageManager {
                                             EventBus::post(EventDomain::STORAGE,request.response_event_id,&request.requester,sizeof(request.requester));
                                         }
                                     }else{ESP_LOGE(TAG, "SAVE CONFIG_DATA: Dados inválidos ou tamanho incorreto.");}
-                                    break;
-                                }
-                                case StorageStructType::DEVICE_DATA: {
-                                    if (request.data_ptr && request.data_len == sizeof(DeviceDTO)) {
-                                        DeviceDTO* device_dto = static_cast<DeviceDTO*>(request.data_ptr);
-                                        std::string device_id_str(device_dto->id);
-                                        Device* existing_device = getMutableDeviceInternal(device_id_str);
-                                        if (existing_device) {
-                                            memcpy(existing_device, device_dto, sizeof(DeviceDTO));
-                                            Storage::saveDeviceFile(existing_device);
-                                            if (request.response_event_id != EventId::NONE){
-                                                EventBus::post(EventDomain::STORAGE,request.response_event_id,&request.requester,sizeof(request.requester));
-                                            }
-                                            ESP_LOGI(TAG, "Dispositivo '%s' atualizado na PSRAM e salvo na flash. Status: %s", device_id_str.c_str(), esp_err_to_name(err));
-                                        } else {
-                                            ESP_LOGI(TAG,"SAVE DEVICE_DATA: Disp '%s' não encontrado na PSRAM. Alocando e registrando novo dispositivo.",device_id_str.c_str());
-                                            Device* new_device_ptr = (Device*)heap_caps_malloc(sizeof(Device), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-                                            if (!new_device_ptr) {
-                                                ESP_LOGE(TAG, "SAVE DEVICE_DATA: Falha ao alocar memória para novo dispositivo '%s' na PSRAM.", device_id_str.c_str());
-                                            } else {
-                                                memcpy(new_device_ptr, device_dto, sizeof(DeviceDTO));
-                                                registerDevice(new_device_ptr); 
-                                                Storage::saveDeviceFile(new_device_ptr);
-                                                if (request.response_event_id != EventId::NONE) {
-                                                    EventBus::post(EventDomain::STORAGE,request.response_event_id,&request.requester,sizeof(request.requester));
-                                                }
-                                                ESP_LOGI(TAG, "Novo disp '%s' alocado na PSRAM, registrado e salvo na flash. Status: %s", device_id_str.c_str(), esp_err_to_name(err));
-                                            }
-                                        }
-                                    }else{ESP_LOGE(TAG, "SAVE DEVICE_DATA: Dados inválidos ou tamanho incorreto.");}
-                                    break;
-                                }
-                                case StorageStructType::SENSOR_DATA: 
-                                {
-                                    if (request.data_ptr && request.data_len == sizeof(SensorDTO)) {
-                                        SensorDTO* sensor_dto = static_cast<SensorDTO*>(request.data_ptr);
-                                        std::string sensor_id_str(sensor_dto->id);
-                                        Sensor* existing_sensor = getMutableSensorInternal(sensor_id_str);
-                                        if (existing_sensor) {
-                                            memcpy(existing_sensor, sensor_dto, sizeof(SensorDTO));
-                                            Storage::saveSensorFile(existing_sensor);
-                                            if (request.response_event_id != EventId::NONE) {
-                                                EventBus::post(EventDomain::STORAGE,request.response_event_id,&request.requester,sizeof(request.requester));
-                                            }
-                                            ESP_LOGI(TAG, "Sensor '%s' atualizado na PSRAM e salvo na flash. Status: %s", sensor_id_str.c_str(), esp_err_to_name(err));
-                                        } else {
-                                            ESP_LOGI(TAG, "SAVE SENSOR_DATA: Sensor '%s' não encontrado na PSRAM. Alocando e registrando novo sensor.", sensor_id_str.c_str());
-                                            Sensor* new_sensor_ptr = (Sensor*)heap_caps_malloc(sizeof(Sensor), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-                                            if (!new_sensor_ptr) {
-                                                ESP_LOGE(TAG, "SAVE SENSOR_DATA: Falha ao alocar memória para novo sensor '%s' na PSRAM.", sensor_id_str.c_str());
-                                            } else {
-                                                memcpy(new_sensor_ptr, sensor_dto, sizeof(SensorDTO));
-                                                registerSensor(new_sensor_ptr); 
-                                                Storage::saveSensorFile(new_sensor_ptr);
-                                                if (request.response_event_id != EventId::NONE) {
-                                                    EventBus::post(EventDomain::STORAGE,request.response_event_id,&request.requester,sizeof(request.requester));
-                                                }
-                                                ESP_LOGI(TAG,"Novo sensor '%s' alocado na PSRAM, registrado e salvo na flash. Status: %s",sensor_id_str.c_str(),esp_err_to_name(err));
-                                            }
-                                        }
-                                    }else{ESP_LOGE(TAG, "SAVE DEVICE_DATA: Dados inválidos ou tamanho incorreto.");}
-                                    break;
-                                }
-                                case StorageStructType::AUTOMA_DATA: {
-                                    ESP_LOGI(TAG, "Salvando AUTOMA_DATA (TODO)");
-                                    // TODO: Implementar lógica para AUTOMA_DATA
-                                    err = ESP_ERR_NOT_SUPPORTED;
-                                    break;
-                                }
-                                case StorageStructType::SCHEDULE_DATA: {
-                                    ESP_LOGI(TAG, "Salvando SCHEDULE_DATA (TODO)");
-                                    // TODO: Implementar lógica para SCHEDULE_DATA
-                                    err = ESP_ERR_NOT_SUPPORTED;
                                     break;
                                 }
                             }
