@@ -16,11 +16,13 @@ namespace Storage {
                 case 1:if(*line){strncpy(StorageManager::cfg->token_id,line,sizeof(StorageManager::cfg->token_id)-1);StorageManager::cfg->token_id[sizeof(StorageManager::cfg->token_id)-1]='\0';}break;
                 case 2:if(*line){strncpy(StorageManager::cfg->token_password,line,sizeof(StorageManager::cfg->token_password)-1);StorageManager::cfg->token_password[sizeof(StorageManager::cfg->token_password)-1]='\0';}break;
                 case 3:if(*line){strncpy(StorageManager::cfg->token_flag,line,sizeof(StorageManager::cfg->token_flag)-1);StorageManager::cfg->token_flag[sizeof(StorageManager::cfg->token_flag)-1]='\0';}break;
+                case 4:if(*line){strncpy(StorageManager::cfg->keys,line,sizeof(StorageManager::cfg->keys)-1);StorageManager::cfg->keys[sizeof(StorageManager::cfg->keys)-1]='\0';}break;
+                // case 4: if(*line){sniprintf(StorageManager::cfg->keys,sizeof(StorageManager::cfg->keys),"%s",line);}break;
             }
             ++index;
         }
         fclose(f);
-        ESP_LOGI(TAG, "Configuração /config/config carregada (%d linhas)", index);
+        ESP_LOGI(TAG, "Configuração /config/config carregada (%d linhas): nome= %s tk_flg=%s tk_id=%s tk_psw=%s keys=%s ", index,StorageManager::cfg->central_name,StorageManager::cfg->token_flag,StorageManager::cfg->token_id,StorageManager::cfg->token_password,StorageManager::cfg->keys);
     }
     static void loadCredentialConfigFile() {
         const char* path = "/littlefs/config/credential";
@@ -67,6 +69,7 @@ namespace Storage {
         fprintf(f, "%s\n", cfg->token_id);
         fprintf(f, "%s\n", cfg->token_password);
         fprintf(f, "%s\n", cfg->token_flag);
+        fprintf(f, "%s\n", cfg->keys);
         if(ferror(f)){ESP_LOGE(TAG, "Erro de escrita no arquivo LittleFS: %s", path);fclose(f);return ESP_FAIL;}
         fclose(f);
         ESP_LOGI(TAG, "Configuração salva com sucesso em LittleFS: %s", path);

@@ -58,7 +58,39 @@ namespace MqttManager {
                 ESP_LOGI(TAG, "Mensagem Recebida!");
                 ESP_LOGI(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
                 ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
-                
+
+                if (event->data_len > 0 && event->data[0] == '#') {
+                    char* payload = (char*)malloc(event->data_len+1);
+                    if(payload){
+                        memcpy(payload, event->data, event->data_len);
+                        payload[event->data_len]='\0';
+
+                        char* clean_payload = payload;
+                        clean_payload[strcspn(clean_payload, "\r\n")] = 0;
+
+                        ESP_LOGI(TAG, "Recebido pacote de chaves: %s", clean_payload);
+                        if (event->data_len >= MAX_KEYS_LENGTH) {
+                            ESP_LOGE(TAG, "String de chaves muito longa! Max: %d", MAX_KEYS_LENGTH);
+                            break;
+                        }
+                        GlobalConfigDTO* gdto = (GlobalConfigDTO*)malloc(sizeof(GlobalConfigDTO));
+                        if(gdto){
+                            memcpy(gdto,StorageManager::cfg,sizeof(GlobalConfigDTO));
+                            memset(gdto->keys,0,sizeof(gdto->keys));
+                            sniprintf(gdto->keys,sizeof(gdto->keys),"%s",clean_payload);
+                            ESP_LOGW(TAG, "GDTO nome=%s tkfl=%s tkid=%s tkpass%s Keys=%s", gdto->central_name,gdto->token_flag, gdto->token_id, gdto->token_password, gdto->keys);
+                            RequestSave req; req.resquest_type=RequestTypes::REQUEST_NONE; req.requester=99;
+                            esp_err_t ret = StorageManager::enqueueRequest(StorageCommand::SAVE,StorageStructType::CONFIG_DATA,gdto,sizeof(GlobalConfigDTO),req);
+                            free(gdto);
+                        } else {
+                            ESP_LOGE(TAG, "Falha de memória: Não foi possível alocar DTO temporário");
+                        }
+                        free(payload);
+
+                    } else {
+                        ESP_LOGE(TAG, "Falha de memória ao processar MQTT payload");
+                    }
+                }
                 // TODO: Aqui futuramente você pode adicionar o parser de comandos
                 // Ex: Se receber comando "OPEN", chamar DeviceManager::unlock()
                 break;

@@ -28,6 +28,7 @@
 #define MAX_TOKEN_PASSWORD_LEN          65
 #define MAX_TOKEN_FLAG_LEN               2
 #define MAX_HTML_OPTIONS_BUFFER_SIZE  8192
+#define MAX_KEYS_LENGTH               128
 
 struct WifiScanCache {
     char* networks_html_ptr;
@@ -56,11 +57,13 @@ struct GlobalConfig {
     char token_id[MAX_TOKEN_ID_LEN];
     char token_password[MAX_TOKEN_PASSWORD_LEN];
     char token_flag[MAX_TOKEN_FLAG_LEN];
+    char keys[MAX_KEYS_LENGTH];
     GlobalConfig() {
         memset(central_name, 0, sizeof(central_name));
         memset(token_id, 0, sizeof(token_id));
         memset(token_password, 0, sizeof(token_password));
         memset(token_flag, 0, sizeof(token_flag));
+        memset(keys, 0, sizeof(keys));
     }
 };
 struct GlobalConfigDTO {
@@ -68,11 +71,13 @@ struct GlobalConfigDTO {
     char token_id[MAX_TOKEN_ID_LEN];
     char token_password[MAX_TOKEN_PASSWORD_LEN];
     char token_flag[MAX_TOKEN_FLAG_LEN];
+    char keys[MAX_KEYS_LENGTH];
     GlobalConfigDTO() {
         memset(central_name, 0, sizeof(central_name));
         memset(token_id, 0, sizeof(token_id));
         memset(token_password, 0, sizeof(token_password));
         memset(token_flag, 0, sizeof(token_flag));
+        memset(keys, 0, sizeof(keys));
     }
 };
 struct CredentialConfig {

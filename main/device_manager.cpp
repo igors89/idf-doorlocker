@@ -78,6 +78,9 @@ namespace DeviceManager{
     }
     static void buzzer_beep_nonblocking(uint32_t ms){
         if(!buzzer_timer)return;
+        if (esp_timer_is_active(buzzer_timer)) {
+            esp_timer_stop(buzzer_timer);
+        }
         gpio_set_level(BUZZER_GPIO,BUZZER_ACTIVE);
         esp_timer_start_once(buzzer_timer,(uint64_t)ms*1000ULL);
     }
@@ -129,8 +132,11 @@ namespace DeviceManager{
 
                 // Verifica se completou a senha
                 if(input_count == PASS_LEN){
-                    ESP_LOGI(TAG, "Senha de 6 digitos recebida = %s. Sucesso!", password_buffer);
-                    play_success_sequence();
+                    ESP_LOGI(TAG, "Tags cadastradas = %s", StorageManager::cfg->keys);
+                    ESP_LOGI(TAG, "Tag inserida = %s", password_buffer);
+
+                    if(!StorageManager::isBlankOrEmpty(StorageManager::cfg->keys) && (strstr(StorageManager::cfg->keys,password_buffer)!=nullptr)) {play_success_sequence();}
+                    else {buzzer_beep_nonblocking(BEEP_LONG_MS);}
 
                     vTaskDelay(pdMS_TO_TICKS(INTERVAL));
 
