@@ -57,8 +57,8 @@ namespace NetManager
         if (xTimerReset(blocked_aid_timer, 0) != pdPASS) {ESP_LOGE(TAG, "Falha ao iniciar/resetar o timer de bloqueio!");}
         else {ESP_LOGI(TAG, "Timer de bloqueio iniciado.");}
     }
-    static void chage_timer_ap(TimerHandle_t xTimer){
-        ESP_LOGI(TAG, "[TIMER] 60s passaram. Alterando dados do AP...");
+    static void change_timer_ap(TimerHandle_t xTimer){
+        ESP_LOGI(TAG, "[TIMER] 20s passaram. Alterando dados do AP...");
         wifi_config_t ap_cfg{};
         strncpy((char*)ap_cfg.ap.ssid, StorageManager::cfg->central_name, sizeof(ap_cfg.ap.ssid) - 1);
         ap_cfg.ap.ssid[sizeof(ap_cfg.ap.ssid)-1]='\0';
@@ -66,10 +66,8 @@ namespace NetManager
         ap_cfg.ap.channel=1;
         ap_cfg.ap.max_connection=4;
         ap_cfg.ap.authmode=WIFI_AUTH_OPEN;
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP,&ap_cfg));
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        vTaskDelay(pdMS_TO_TICKS(100));
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP,&ap_cfg));
         ESP_LOGI(TAG,"AP atualizado para SSID: %s",ap_cfg.ap.ssid);
     }
     static void onEventReadyBus(void*,esp_event_base_t base,int32_t id,void*)
@@ -139,10 +137,10 @@ namespace NetManager
     {
         if (static_cast<EventId>(id)==EventId::STO_SSIDOK){ESP_LOGI(TAG,"Iniciando STA");connectSTA();}
         if (static_cast<EventId>(id)==EventId::STO_CONFIGSAVED){
-            ESP_LOGI(TAG,"Alterou configuração – iniciando timer de 60s para alterar AP.");
+            ESP_LOGI(TAG,"Alterou configuração – iniciando timer de 20s para alterar AP.");
             if(ap_change_timer!=nullptr){
                 xTimerStop(ap_change_timer,0);
-                xTimerChangePeriod(ap_change_timer,pdMS_TO_TICKS(60000),0);
+                xTimerChangePeriod(ap_change_timer,pdMS_TO_TICKS(20000),0);
                 xTimerStart(ap_change_timer,0);
             }
         }
@@ -386,7 +384,7 @@ namespace NetManager
         EventBus::regHandler(EventDomain::READY, &onEventReadyBus, nullptr);
         blocked_aid_timer=xTimerCreate("BlockedAIDTimer",pdMS_TO_TICKS(30000),pdFALSE,(void*)0,unblock_aid_timer_callback);
         if(blocked_aid_timer==nullptr){ESP_LOGE(TAG,"Falha ao criar timer para bloqueio de AID!");return ESP_FAIL;}
-        ap_change_timer=xTimerCreate("ChangeAPTimer",pdMS_TO_TICKS(45000),pdFALSE,(void*)0,chage_timer_ap);
+        ap_change_timer=xTimerCreate("ChangeAPTimer",pdMS_TO_TICKS(20000),pdFALSE,(void*)0,change_timer_ap);
         if(ap_change_timer==nullptr){ESP_LOGE(TAG,"Falha ao criar AP change timer!");}
         EventBus::post(EventDomain::READY, EventId::NET_READY);
         ESP_LOGI(TAG, "NetManager inicializado (aguardando READY_ALL para iniciar AP)");

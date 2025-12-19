@@ -10,14 +10,29 @@ namespace DeviceManager{
     #define BUZZER_INACTIVE  1
     #define BUZZER_MS        100
 
+    // RF 433MHz (Baseado no seu pRF=10 do Arduino)
+    #define RF_GPIO          GPIO_NUM_2
+    #define RF_PULSE_LEN     350  // Tempo base do RC-Switch (Protocolo 1)
+    #define RF_REPEAT        2    // Quantas vezes repetir o sinal (garantia)
+
+
+    // --- CONFIGURAÇÃO DE ENERGIA ---
+    #define ENERGY_ADC_UNIT     ADC_UNIT_1
+    #define ENERGY_ADC_CHANNEL  ADC_CHANNEL_1 
+    #define ENERGY_THRESHOLD    1000  // Valor RAW do Arduino (0-4095)
+    #define ENERGY_CHECK_MS     10000 // 10 segundos
+
     // Configurações de Beep e Lógica
     #define BEEP_LONG_MS     1000
     #define PASS_LEN         6
     #define INPUT_TIMEOUT_MS 3000
     #define INTERVAL         500
     static esp_timer_handle_t buzzer_timer=nullptr;
+    static esp_timer_handle_t energy_timer=nullptr;
+    // Variáveis ADC
+    static adc_oneshot_unit_handle_t adc_handle = nullptr;
+    static int s_power_state = 0; // 0=Normal, 1=Sem Energia
     // devices
-    // static const gpio_num_t OUTPUT_DEV[4]={GPIO_NUM_41,GPIO_NUM_42,GPIO_NUM_40,GPIO_NUM_39};
     static const touch_pad_t BUTTON_DEV[6]={TOUCH_PAD_NUM4,TOUCH_PAD_NUM5,TOUCH_PAD_NUM6,TOUCH_PAD_NUM7,TOUCH_PAD_NUM8,TOUCH_PAD_NUM1};
     static uint32_t last_press_time[6]={0,0,0,0,0,0};
     static const uint32_t DEBOUNCE_MS=200;
@@ -43,6 +58,113 @@ namespace DeviceManager{
     //     }
     //     ESP_LOGI(TAG, "GPIOs de saída inicializadas");
     // }
+
+
+    // --- Implementação RF 433MHz (Estilo RC-Switch) ---
+    static void init_rf(){
+        gpio_reset_pin(RF_GPIO);
+        gpio_set_direction(RF_GPIO, GPIO_MODE_OUTPUT);
+        gpio_set_level(RF_GPIO, 0);
+        ESP_LOGI(TAG, "RF 433MHz inicializado no GPIO %d", RF_GPIO);
+    }
+
+    // Função auxiliar para enviar pulso High/Low
+    static void transmit_pulse(int high_len, int low_len) {
+        gpio_set_level(RF_GPIO, 1);
+        esp_rom_delay_us(high_len);
+        gpio_set_level(RF_GPIO, 0);
+        esp_rom_delay_us(low_len);
+    }
+
+    // Portagem da função mySwitch.send(code, 24)
+    // Protocolo 1: 
+    // '0' = 1 High, 3 Low
+    // '1' = 3 High, 1 Low
+    // Sync = 1 High, 31 Low
+    static void send_rf_code(uint32_t code, int length) {
+        for (int r = 0; r < RF_REPEAT; r++) {
+            for (int i = length - 1; i >= 0; i--) {
+                if (code & (1 << i)) {
+                    // Bit 1
+                    transmit_pulse(RF_PULSE_LEN * 3, RF_PULSE_LEN * 1);
+                } else {
+                    // Bit 0
+                    transmit_pulse(RF_PULSE_LEN * 1, RF_PULSE_LEN * 3);
+                }
+            }
+            // Sync bit (no final de cada pacote)
+            transmit_pulse(RF_PULSE_LEN * 1, RF_PULSE_LEN * 31);
+        }
+        ESP_LOGI(TAG, "RF enviado: %" PRIu32 " (%d bits)", code, length);
+    }
+
+    // static void energy_timer_cb(void* arg) {
+    //     if (!adc_handle) return;
+
+    //     int adc_raw = 0;
+    //     // Lê o valor bruto do ADC (equivalente ao analogRead)
+    //     ESP_ERROR_CHECK(adc_oneshot_read(adc_handle, ENERGY_ADC_CHANNEL, &adc_raw));
+
+    //     ESP_LOGI(TAG, "Monitor de Energia: Val=%d | Estado=%d", adc_raw, s_power_state);
+
+    //     // Lógica portada:
+    //     // Estado 0: Energia Normal
+    //     // Estado 1: Modo Bateria (WiFi Desligado)
+
+    //     // CASO 1: Queda de Energia ( analogRead < 1000 )
+    //     if (s_power_state == 0 && adc_raw < ENERGY_THRESHOLD) {
+    //         ESP_LOGW(TAG, "FALTA DE ENERGIA DETECTADA! Desligando WiFi...");
+            
+    //         // Desliga WiFi para economizar bateria
+    //         esp_wifi_disconnect();
+    //         esp_wifi_stop();
+    //         esp_wifi_set_mode(WIFI_MODE_NULL);
+            
+    //         s_power_state = 1; // Marca que estamos sem energia
+            
+    //         // Opcional: Indicação visual (LED) ou sonora aqui
+    //     }
+        
+    //     // CASO 2: Retorno de Energia ( analogRead > 1000 )
+    //     else if (s_power_state == 1 && adc_raw > ENERGY_THRESHOLD) {
+    //         ESP_LOGW(TAG, "RETORNO DE ENERGIA DETECTADO! Reiniciando sistema...");
+            
+    //         // Soft Reset conforme solicitado
+    //         vTaskDelay(pdMS_TO_TICKS(1000)); // Pequeno delay para estabilizar
+    //         esp_restart();
+    //     }
+    // }
+
+    // static void init_energy() {
+    //     // 1. Configuração do ADC OneShot
+    //     adc_oneshot_unit_init_cfg_t init_config = {
+    //         .unit_id = ENERGY_ADC_UNIT,
+    //         .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
+    //     };
+    //     ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
+
+    //     // 2. Configuração do Canal (Atenuação para ler até ~3.3V)
+    //     adc_oneshot_chan_cfg_t config = {
+    //         .atten = ADC_ATTEN_DB_12,           // Permite leitura full-range (até ~3.1V+)
+    //         .bitwidth = ADC_BITWIDTH_DEFAULT, // Geralmente 12 bits (0-4095)
+    //     };
+    //     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ENERGY_ADC_CHANNEL, &config));
+
+    //     // 3. Configuração do Timer de 10 segundos
+    //     const esp_timer_create_args_t energy_timer_args = {
+    //         .callback = &energy_timer_cb,
+    //         .arg = NULL,
+    //         .dispatch_method = ESP_TIMER_TASK,
+    //         .name = "energy_timer"
+    //     };
+    //     ESP_ERROR_CHECK(esp_timer_create(&energy_timer_args, &energy_timer));
+        
+    //     // Inicia o timer periodicamente (10s)
+    //     // ESP_ERROR_CHECK(esp_timer_start_periodic(energy_timer, ENERGY_CHECK_MS * 1000ULL));
+        
+    //     ESP_LOGI(TAG, "Monitor de Energia inicializado (ADC1_CH1 / GPIO2)");
+    // }
+
     static void init_touch(){
         touch_pad_init();
         for (int i = 0; i < 6; ++i){touch_pad_config(BUTTON_DEV[i]);}
@@ -53,7 +175,7 @@ namespace DeviceManager{
         touch_button_global_config_t button_global_config = TOUCH_BUTTON_GLOBAL_DEFAULT_CONFIG();
         ESP_ERROR_CHECK(touch_button_install(&button_global_config));
         for (int i = 0; i < 6; ++i) {
-            touch_button_config_t button_config={.channel_num=BUTTON_DEV[i],.channel_sens=0.5F};
+            touch_button_config_t button_config={.channel_num=BUTTON_DEV[i],.channel_sens=0.1F};
             ESP_ERROR_CHECK(touch_button_create(&button_config,&button_handle[i]));
             ESP_ERROR_CHECK(touch_button_subscribe_event(button_handle[i],TOUCH_ELEM_EVENT_ON_PRESS,(void*)i));
             ESP_ERROR_CHECK(touch_button_set_dispatch_method(button_handle[i],TOUCH_ELEM_DISP_CALLBACK));
@@ -135,7 +257,7 @@ namespace DeviceManager{
                     ESP_LOGI(TAG, "Tags cadastradas = %s", StorageManager::cfg->keys);
                     ESP_LOGI(TAG, "Tag inserida = %s", password_buffer);
 
-                    if(!StorageManager::isBlankOrEmpty(StorageManager::cfg->keys) && (strstr(StorageManager::cfg->keys,password_buffer)!=nullptr)) {play_success_sequence();}
+                    if(!StorageManager::isBlankOrEmpty(StorageManager::cfg->keys) && (strstr(StorageManager::cfg->keys,password_buffer)!=nullptr)) {play_success_sequence(); send_rf_code(123456, 24); }
                     else {buzzer_beep_nonblocking(BEEP_LONG_MS);}
 
                     vTaskDelay(pdMS_TO_TICKS(INTERVAL));
@@ -193,6 +315,8 @@ namespace DeviceManager{
         if (static_cast<EventId>(id)==EventId::READY_ALL) {
             EventBus::unregHandler(EventDomain::READY, &onReadyEvent);
             init_touch();
+            init_rf();  
+            // init_energy();
             // init_gpios();
             init_buzzer();
             EventBus::post(EventDomain::DEVICE, EventId::DEV_STARTED);

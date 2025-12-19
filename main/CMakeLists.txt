@@ -25,6 +25,7 @@ idf_component_register(
         esp_wifi
         esp_http_server
         esp_eth
+        esp_adc
         esp_timer
         cjson
         driver

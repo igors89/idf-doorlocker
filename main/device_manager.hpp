@@ -16,6 +16,8 @@
 #include <string.h>
 // #include "driver/i2c.h"
 #include "esp_heap_caps.h"
+#include "esp_wifi.h"
+#include "esp_adc/adc_oneshot.h"
 // #include "qrcodegen.h"
 
 
