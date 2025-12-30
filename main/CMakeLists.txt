@@ -13,11 +13,13 @@ idf_component_register(
         "matter_manager.cpp"
         "device_manager.cpp"
         "ble_manager.cpp"
+        # "RCSwitch.cpp"
         #
 
     INCLUDE_DIRS 
         "."
         "../components/dns_server/include"
+        "../components/RCSwitch/include"
     
     REQUIRES
         esp_common

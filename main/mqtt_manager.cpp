@@ -36,8 +36,8 @@ namespace MqttManager {
                 esp_mqtt_client_subscribe(s_client, topic_sub, 0);
                 ESP_LOGI(TAG, "Inscrito no tópico: %s", topic_sub);
                 vTaskDelay(pdMS_TO_TICKS(200));
-                esp_mqtt_client_publish(s_client, "SRV/TecladoESP", StorageManager::id_cfg->id, 0, 0, 0);
-                ESP_LOGI(TAG, "ID publicado em SRV/TecladoESP");
+                esp_mqtt_client_publish(s_client, "SRV/tecladoESP", StorageManager::id_cfg->id, 0, 0, 0);
+                ESP_LOGI(TAG, "ID publicado em SRV/tecladoESP");
                 break;
 
             case MQTT_EVENT_DISCONNECTED:

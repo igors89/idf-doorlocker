@@ -1,5 +1,6 @@
 
 #include "device_manager.hpp"
+#include "RCSwitch.hpp"
 
 static const char* TAG = "DeviceManager";
 
@@ -10,11 +11,7 @@ namespace DeviceManager{
     #define BUZZER_INACTIVE  1
     #define BUZZER_MS        100
 
-    // RF 433MHz (Baseado no seu pRF=10 do Arduino)
-    #define RF_GPIO          GPIO_NUM_2
-    #define RF_PULSE_LEN     350  // Tempo base do RC-Switch (Protocolo 1)
-    #define RF_REPEAT        2    // Quantas vezes repetir o sinal (garantia)
-
+    // #define RF_GPIO          GPIO_NUM_10
 
     // --- CONFIGURAÇÃO DE ENERGIA ---
     #define ENERGY_ADC_UNIT     ADC_UNIT_1
@@ -40,10 +37,15 @@ namespace DeviceManager{
     static QueueHandle_t touch_queue=nullptr;
     static QueueHandle_t storage_event_queue=nullptr;
     static void storage_event_task(void* arg);
+
     // Variáveis de controle da senha
     static char password_buffer[PASS_LEN+1]={0};    
     static uint8_t input_count = 0;
     static int64_t last_input_time = 0;
+    static uint32_t chipID = 0;
+
+    RCSWITCH_t mySwitch;
+
     // inicializações
     // static void init_gpios(){
     //     for (int i = 0; i < 4; ++i) {
@@ -58,45 +60,6 @@ namespace DeviceManager{
     //     }
     //     ESP_LOGI(TAG, "GPIOs de saída inicializadas");
     // }
-
-
-    // --- Implementação RF 433MHz (Estilo RC-Switch) ---
-    static void init_rf(){
-        gpio_reset_pin(RF_GPIO);
-        gpio_set_direction(RF_GPIO, GPIO_MODE_OUTPUT);
-        gpio_set_level(RF_GPIO, 0);
-        ESP_LOGI(TAG, "RF 433MHz inicializado no GPIO %d", RF_GPIO);
-    }
-
-    // Função auxiliar para enviar pulso High/Low
-    static void transmit_pulse(int high_len, int low_len) {
-        gpio_set_level(RF_GPIO, 1);
-        esp_rom_delay_us(high_len);
-        gpio_set_level(RF_GPIO, 0);
-        esp_rom_delay_us(low_len);
-    }
-
-    // Portagem da função mySwitch.send(code, 24)
-    // Protocolo 1: 
-    // '0' = 1 High, 3 Low
-    // '1' = 3 High, 1 Low
-    // Sync = 1 High, 31 Low
-    static void send_rf_code(uint32_t code, int length) {
-        for (int r = 0; r < RF_REPEAT; r++) {
-            for (int i = length - 1; i >= 0; i--) {
-                if (code & (1 << i)) {
-                    // Bit 1
-                    transmit_pulse(RF_PULSE_LEN * 3, RF_PULSE_LEN * 1);
-                } else {
-                    // Bit 0
-                    transmit_pulse(RF_PULSE_LEN * 1, RF_PULSE_LEN * 3);
-                }
-            }
-            // Sync bit (no final de cada pacote)
-            transmit_pulse(RF_PULSE_LEN * 1, RF_PULSE_LEN * 31);
-        }
-        ESP_LOGI(TAG, "RF enviado: %" PRIu32 " (%d bits)", code, length);
-    }
 
     // static void energy_timer_cb(void* arg) {
     //     if (!adc_handle) return;
@@ -257,8 +220,11 @@ namespace DeviceManager{
                     ESP_LOGI(TAG, "Tags cadastradas = %s", StorageManager::cfg->keys);
                     ESP_LOGI(TAG, "Tag inserida = %s", password_buffer);
 
-                    if(!StorageManager::isBlankOrEmpty(StorageManager::cfg->keys) && (strstr(StorageManager::cfg->keys,password_buffer)!=nullptr)) {play_success_sequence(); send_rf_code(123456, 24); }
-                    else {buzzer_beep_nonblocking(BEEP_LONG_MS);}
+                    if(!StorageManager::isBlankOrEmpty(StorageManager::cfg->keys) && (strstr(StorageManager::cfg->keys,password_buffer)!=nullptr)) {
+                        play_success_sequence();
+                        ESP_LOGI(TAG, "Acesso Permitido! Enviando RF Code: %lu", chipID);
+                        sendCode(&mySwitch,chipID,CONFIG_RF_LENGTH);
+                    } else { buzzer_beep_nonblocking(BEEP_LONG_MS); }
 
                     vTaskDelay(pdMS_TO_TICKS(INTERVAL));
 
@@ -314,8 +280,18 @@ namespace DeviceManager{
     static void onReadyEvent(void*,esp_event_base_t,int32_t id,void*) {
         if (static_cast<EventId>(id)==EventId::READY_ALL) {
             EventBus::unregHandler(EventDomain::READY, &onReadyEvent);
+            uint8_t mac[6];
+            esp_read_mac(mac,ESP_MAC_WIFI_STA);
+            chipID = ((uint32_t)mac[3] << 16 | (uint32_t)mac[4] << 8 | (uint32_t)mac[5]);
+            ESP_LOGI(TAG,"ChipID: %lu",chipID);
             init_touch();
-            init_rf();  
+            initSwich(&mySwitch);
+            enableTransmit(&mySwitch, CONFIG_RF_GPIO);
+            // ESP_LOGI(TAG, "CONFIG_RF_PROTOCOL=%d", CONFIG_RF_PROTOCOL);
+            setProtocol(&mySwitch, CONFIG_RF_PROTOCOL);
+            // ESP_LOGI(TAG, "CONFIG_RF_REPEAT=%d", CONFIG_RF_REPEAT);
+            setRepeatTransmit(&mySwitch, CONFIG_RF_REPEAT);
+            // ESP_LOGI(TAG, "CONFIG_RF_LENGTH=%d", CONFIG_RF_LENGTH);
             // init_energy();
             // init_gpios();
             init_buzzer();
