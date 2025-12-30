@@ -59,16 +59,7 @@ namespace NetManager
     }
     static void change_timer_ap(TimerHandle_t xTimer){
         ESP_LOGI(TAG, "[TIMER] 20s passaram. Alterando dados do AP...");
-        wifi_config_t ap_cfg{};
-        strncpy((char*)ap_cfg.ap.ssid, StorageManager::cfg->central_name, sizeof(ap_cfg.ap.ssid) - 1);
-        ap_cfg.ap.ssid[sizeof(ap_cfg.ap.ssid)-1]='\0';
-        ap_cfg.ap.ssid_len=strlen((char*)ap_cfg.ap.ssid);
-        ap_cfg.ap.channel=1;
-        ap_cfg.ap.max_connection=4;
-        ap_cfg.ap.authmode=WIFI_AUTH_OPEN;
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP,&ap_cfg));
-        ESP_LOGI(TAG,"AP atualizado para SSID: %s",ap_cfg.ap.ssid);
+        EventBus::post(EventDomain::NETWORK, EventId::NET_UPDATE_AP_CONFIG);
     }
     static void onEventReadyBus(void*,esp_event_base_t base,int32_t id,void*)
     {
@@ -132,15 +123,28 @@ namespace NetManager
                 ESP_LOGE(TAG, "AID inválido no evento NET_SUSPCLIENT.");
             }
         }
+        if (evt == EventId::NET_UPDATE_AP_CONFIG){       
+            ESP_LOGI(TAG,"Atualizando AP");     
+            wifi_config_t ap_cfg{};
+            strncpy((char*)ap_cfg.ap.ssid, StorageManager::cfg->central_name, sizeof(ap_cfg.ap.ssid) - 1);
+            ap_cfg.ap.ssid[sizeof(ap_cfg.ap.ssid)-1]='\0';
+            ap_cfg.ap.ssid_len=strlen((char*)ap_cfg.ap.ssid);
+            ap_cfg.ap.channel=1;
+            ap_cfg.ap.max_connection=4;
+            ap_cfg.ap.authmode=WIFI_AUTH_OPEN;
+            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP,&ap_cfg));
+            ESP_LOGI(TAG,"AP atualizado para SSID: %s",ap_cfg.ap.ssid);
+        }
     }
     static void onEventStorageBus(void*,esp_event_base_t base,int32_t id,void*)
     {
         if (static_cast<EventId>(id)==EventId::STO_SSIDOK){ESP_LOGI(TAG,"Iniciando STA");connectSTA();}
         if (static_cast<EventId>(id)==EventId::STO_CONFIGSAVED){
-            ESP_LOGI(TAG,"Alterou configuração – iniciando timer de 20s para alterar AP.");
+            ESP_LOGI(TAG,"Alterou configuração – iniciando timer de 10s para alterar AP.");
             if(ap_change_timer!=nullptr){
                 xTimerStop(ap_change_timer,0);
-                xTimerChangePeriod(ap_change_timer,pdMS_TO_TICKS(20000),0);
+                xTimerChangePeriod(ap_change_timer,pdMS_TO_TICKS(10000),0);
                 xTimerStart(ap_change_timer,0);
             }
         }
